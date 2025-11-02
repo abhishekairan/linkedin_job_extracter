@@ -1,9 +1,34 @@
+import importlib
+import subprocess
+import sys
+import time
+import os
+
+def ensure_packages(pkgs):
+    """Ensure packages (list of dicts with keys 'package' and 'module') are installed.
+    Installs missing packages using pip.
+    """
+    for pkg in pkgs:
+        try:
+            importlib.import_module(pkg["module"])
+        except ImportError:
+            print(f"Package '{pkg['package']}' not found. Installing...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg["package"]])
+
+# Ensure required packages are present
+ensure_packages([
+    {"package": "selenium", "module": "selenium"},
+    {"package": "webdriver-manager", "module": "webdriver_manager"},
+    {"package": "selenium-stealth", "module": "selenium_stealth"},
+    {"package": "python-dotenv", "module": "dotenv"},
+])
+
 from selenium import webdriver
 from selenium_stealth import stealth
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 from scripts import get_jobs_page_html, search_jobs, linkedin_login
-import time
-import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -21,7 +46,7 @@ options = Options()
 options.headless = False
 options.add_argument("--disable-blink-features=AutomationControlled")
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36")
-driver = webdriver.Chrome(options=options)
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 stealth(driver,
         languages=["en-US", "en"],
         vendor="Google Inc.",
