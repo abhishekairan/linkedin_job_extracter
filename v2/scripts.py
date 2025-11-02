@@ -3,7 +3,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import json
 import time
+import os
+from dotenv import load_dotenv
 from bs4 import BeautifulSoup
+
+# Load environment variables from .env file
+load_dotenv()
 
 def load_cookies(driver: webdriver.Chrome):
     with open("cookies.json", "r") as f:
@@ -32,7 +37,13 @@ def search_jobs(driver: webdriver.Chrome, keyword="Python Developer", location="
     job_search_input.send_keys(Keys.RETURN)
 
 
-def linkedin_login(driver: webdriver.Chrome, username: str= "cubicfammy@gmail.com", password: str="9f6aZq~@.#K7h$!"):
+def linkedin_login(driver: webdriver.Chrome, username: str = None, password: str = None):
+    username = username or os.getenv("LINKEDIN_USERNAME")
+    password = password or os.getenv("LINKEDIN_PASSWORD")
+    
+    if not username or not password:
+        raise ValueError("LinkedIn credentials not found. Please set LINKEDIN_USERNAME and LINKEDIN_PASSWORD environment variables.")
+    
     time.sleep(2)
     username_input = driver.find_element(By.ID, "username")
     password_input = driver.find_element(By.ID, "password")

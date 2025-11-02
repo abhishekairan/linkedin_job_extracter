@@ -3,6 +3,19 @@ from selenium_stealth import stealth
 from selenium.webdriver.chrome.options import Options
 from scripts import get_jobs_page_html, search_jobs, linkedin_login
 import time
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Check if environment variables are set
+if not os.getenv("LINKEDIN_USERNAME") or not os.getenv("LINKEDIN_PASSWORD"):
+    print("Error: Please configure your LinkedIn credentials in the .env file")
+    print("Make sure to create a .env file in the v2 directory with:")
+    print("LINKEDIN_USERNAME=your_email@example.com")
+    print("LINKEDIN_PASSWORD=your_password")
+    exit(1)
 
 options = Options()
 options.headless = False
