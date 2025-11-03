@@ -1,0 +1,14 @@
+I want to create a automatic linked job extractor which login as user and search for the job to get the most jobs posted within past 3 hours for that i want to create the following services:
+1. To open browser and logging in and mainintaing the browser instance to be used by other services
+2. to serach the job and extract the jobs and return the Dictionary of jobs
+
+Notes:
+- Make a project.md file to explain the just the steps so that we can recreate this project or to have proper context of the project
+- Make sure to maintain a single instance of the browser to avoid multiple login into account which helps preventing the account from getting flaged
+- Get the job card by injecting javascript code to get the elements through attribute (bs4 or other will not work as linkedin secure it by returning the scripts instead of raw html) "data-view-name="job-card"" and job id by "data-job-id" attribute value
+- Make sure the project is scalable in the future for further performing opernations through multiple job ids
+- Delete the old files which are no longer required
+- Maintain a changelog.md file
+- Create 3 separate md file for explaining the browser and login service, job search service and last to remotely access the browser through RealVCN Viewer
+- Make sure to bypass all linkedin security which can lead to account ban or flagging
+- Avoid login multiple time to prevent from getting flaged

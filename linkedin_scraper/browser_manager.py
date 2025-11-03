@@ -86,6 +86,41 @@ class BrowserManager:
         # Headless mode if configured
         if self.config.HEADLESS_MODE:
             options.add_argument('--headless')
+            options.add_argument('--headless=new')  # New headless mode
+            options.add_argument('--disable-gpu')
+        else:
+            # For non-headless mode, ensure DISPLAY is set
+            import os
+            display = os.getenv('DISPLAY')
+            if not display:
+                logger.warning("HEADLESS_MODE=False but DISPLAY environment variable not set")
+                logger.warning("Chrome may fail to start. Setting up Xvfb automatically...")
+                # Try to setup Xvfb automatically
+                try:
+                    import subprocess
+                    import time
+                    # Check if Xvfb is already running on :99
+                    result = subprocess.run(['pgrep', '-f', 'Xvfb :99'], 
+                                          capture_output=True, text=True)
+                    if not result.stdout.strip():
+                        # Start Xvfb
+                        logger.info("Starting Xvfb on display :99...")
+                        subprocess.Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24', 
+                                         '-ac', '+extension', 'GLX', '+render', '-noreset'],
+                                       stdout=subprocess.DEVNULL, 
+                                       stderr=subprocess.DEVNULL)
+                        time.sleep(2)  # Wait for Xvfb to start
+                    os.environ['DISPLAY'] = ':99'
+                    logger.info("✓ DISPLAY set to :99")
+                except FileNotFoundError:
+                    logger.error("Xvfb not found. Install with: sudo apt install xvfb")
+                    logger.error("Or set DISPLAY manually: export DISPLAY=:1")
+                    raise RuntimeError("DISPLAY not set and Xvfb not available")
+                except Exception as e:
+                    logger.warning(f"Could not setup Xvfb automatically: {str(e)}")
+                    logger.warning("Please set DISPLAY manually or install Xvfb")
+            else:
+                logger.debug(f"Using DISPLAY={display}")
         
         return options
     
@@ -131,6 +166,17 @@ class BrowserManager:
             service = self._create_service()
             
             logger.info(f"Launching Chrome browser on {self.config.PLATFORM}...")
+            logger.info(f"ChromeDriver: {self.config.CHROMEDRIVER_PATH}")
+            logger.info(f"Chrome binary: {self.config.CHROME_BINARY_PATH or 'System default'}")
+            logger.info(f"Headless mode: {self.config.HEADLESS_MODE}")
+            import os
+            logger.info(f"DISPLAY: {os.getenv('DISPLAY', 'Not set')}")
+            
+            # Additional options for non-headless stability
+            if not self.config.HEADLESS_MODE:
+                options.add_argument('--disable-gpu')  # Helps on some systems
+                options.add_argument('--disable-software-rasterizer')
+            
             BrowserManager._shared_driver = webdriver.Chrome(service=service, options=options)
             BrowserManager._shared_driver.implicitly_wait(self.config.IMPLICIT_WAIT)
             
@@ -150,6 +196,33 @@ class BrowserManager:
         
         except Exception as e:
             logger.error(f"Failed to launch browser: {str(e)}")
+            error_msg = str(e)
+            
+            # Provide helpful error messages for common issues
+            if "unable to connect to renderer" in error_msg.lower() or "renderer" in error_msg.lower():
+                logger.error("Chrome renderer connection failed. Common causes:")
+                logger.error("1. DISPLAY environment variable not set (for non-headless mode)")
+                logger.error("2. Display server not running (Xvfb/VNC)")
+                logger.error("3. Chrome binary or ChromeDriver version mismatch")
+                logger.error("\nSolutions:")
+                if not self.config.HEADLESS_MODE:
+                    logger.error("- Install Xvfb: sudo apt install xvfb")
+                    logger.error("- Start Xvfb: Xvfb :99 -screen 0 1920x1080x24 &")
+                    logger.error("- Set DISPLAY: export DISPLAY=:99")
+                logger.error("- Or enable headless mode: HEADLESS_MODE=True in .env")
+                logger.error("- Check ChromeDriver version matches Chrome version")
+            
+            elif "session not created" in error_msg.lower() or "exited" in error_msg.lower():
+                logger.error("Chrome exited immediately. Common causes:")
+                logger.error("1. ChromeDriver version mismatch with Chrome")
+                logger.error("2. Missing system dependencies")
+                logger.error("3. Chrome binary path incorrect")
+                logger.error("4. Permission issues")
+                logger.error("\nTroubleshooting:")
+                logger.error("- Check versions: chromedriver --version && google-chrome --version")
+                logger.error("- Verify paths in .env file")
+                logger.error("- Check logs for detailed ChromeDriver errors")
+            
             raise WebDriverException(f"Browser launch failed: {str(e)}")
     
     def _save_debug_port(self, port):
@@ -218,18 +291,30 @@ class BrowserManager:
                 debug_port = self._get_debug_port()
                 if DEBUG_PORT_FILE.exists():
                     logger.info("Attempting to connect to browser service via remote debugging...")
-                    driver = self.launch_browser(use_remote_debugging=True)
-                    # Verify connection works
-                    if self.is_browser_alive():
-                        logger.info("✓ Connected to browser service successfully")
-                        BrowserManager._shared_driver = driver
-                        return driver
+                    # Test if Chrome is actually accessible on the debug port
+                    import socket
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(2)
+                    result = sock.connect_ex(('127.0.0.1', debug_port))
+                    sock.close()
+                    
+                    if result == 0:
+                        # Port is open, try to connect
+                        driver = self.launch_browser(use_remote_debugging=True)
+                        # Verify connection works
+                        if self.is_browser_alive():
+                            logger.info("✓ Connected to browser service successfully")
+                            BrowserManager._shared_driver = driver
+                            return driver
+                        else:
+                            logger.warning("Failed to connect to remote browser (browser not responsive)")
+                            try:
+                                driver.quit()
+                            except:
+                                pass
                     else:
-                        logger.warning("Failed to connect to remote browser")
-                        try:
-                            driver.quit()
-                        except:
-                            pass
+                        logger.warning(f"Chrome debug port {debug_port} is not accessible. Browser service may have stopped.")
+                        logger.info("Will create new browser instance")
             except Exception as e:
                 logger.debug(f"Could not connect to remote browser: {str(e)}")
                 logger.info("Will create new browser instance")

@@ -151,7 +151,7 @@ Browser should appear on your local machine.
 ```bash
 git clone https://github.com/novnc/noVNC.git
 cd noVNC
-./utils/launch.sh --vnc localhost:5901
+./utils/novnc_proxy --vnc localhost:5901
 ```
 
 ### Step 2: Access via Browser
