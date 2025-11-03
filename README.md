@@ -500,9 +500,15 @@ Log format: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
 **Error**: "Login verification failed" or "CAPTCHA required"
 
 **Solution**:
-- Set `HEADLESS_MODE=False` to allow manual CAPTCHA solving
+- **Manual Verification**: The script now supports manual verification automatically
+  - Set `HEADLESS_MODE=False` in `.env` (required for manual verification)
+  - When verification is needed, the script will pause and wait for you
+  - Complete CAPTCHA/2FA in the browser window
+  - Navigate to LinkedIn feed manually if needed
+  - Script automatically detects when login is complete
+- **First-Time Login**: Always do first login manually to establish session
+- **See**: `MANUAL_LOGIN_GUIDE.md` for detailed manual verification instructions
 - Check credentials in `.env` file
-- LinkedIn may require manual verification on first login
 
 ### Browser Not Found
 
