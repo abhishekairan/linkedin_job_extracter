@@ -187,17 +187,35 @@ class BrowserManager:
             # Launch new browser with remote debugging enabled
             debug_port = DEFAULT_DEBUG_PORT
             
-            # Check if port is already in use
+            # Check if port is already in use and find available port if needed
             import socket
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
-            port_in_use = sock.connect_ex(('127.0.0.1', debug_port)) == 0
-            sock.close()
+            def is_port_available(port):
+                """Check if a port is available."""
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = sock.connect_ex(('127.0.0.1', port))
+                sock.close()
+                return result != 0  # Port is available if connection fails
+            
+            port_in_use = not is_port_available(debug_port)
             
             if port_in_use:
-                logger.warning(f"Port {debug_port} is already in use. Chrome may fail to start.")
-                logger.warning("This usually means another Chrome instance is running.")
-                logger.warning("Consider: 1) Resuming suspended browser service (fg), or 2) Killing existing Chrome processes")
+                logger.warning(f"Port {debug_port} is already in use. Looking for alternative port...")
+                # Try to find an available port
+                alternate_port = None
+                for test_port in range(9223, 9240):  # Try ports 9223-9239
+                    if is_port_available(test_port):
+                        alternate_port = test_port
+                        break
+                
+                if alternate_port:
+                    logger.info(f"Using alternative port {alternate_port} for new browser instance")
+                    debug_port = alternate_port
+                else:
+                    logger.error("No available ports found in range 9222-9239")
+                    logger.error("Please: 1) Resume suspended browser service (fg), or 2) Kill existing Chrome processes")
+                    logger.error("Or manually free up ports by killing Chrome: pkill chrome || pkill chromium")
+                    raise RuntimeError(f"Port {DEFAULT_DEBUG_PORT} is in use and no alternative port available")
             
             options = self._get_chrome_options(use_remote_debugging=False, debug_port=debug_port)
             service = self._create_service()
@@ -407,17 +425,19 @@ class BrowserManager:
         
         # Check if port 9222 is in use before trying to create new browser
         import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        port_check = sock.connect_ex(('127.0.0.1', DEFAULT_DEBUG_PORT))
-        sock.close()
+        def is_port_available(port):
+            """Check if a port is available."""
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex(('127.0.0.1', port))
+            sock.close()
+            return result != 0
         
-        if port_check == 0:
-            logger.warning(f"Port {DEFAULT_DEBUG_PORT} is already in use. This might conflict with new browser instance.")
-            logger.warning("If browser service is suspended, resume it with: fg")
-            logger.warning("Or kill existing Chrome processes and restart browser service.")
-            # Try a different port or give user option
-            logger.info("Attempting to use existing browser on port, or will try to launch anyway...")
+        port_check = is_port_available(DEFAULT_DEBUG_PORT)
+        
+        if not port_check:
+            logger.warning(f"Port {DEFAULT_DEBUG_PORT} is already in use.")
+            logger.info("Will use alternative port for new browser instance if needed.")
         
         # Try to cleanup dead driver reference if it exists
         if BrowserManager._shared_driver is not None:

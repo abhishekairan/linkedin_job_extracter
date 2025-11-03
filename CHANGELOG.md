@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2025-11-03
+
+### Fixed
+
+- **Port Conflict Resolution**: When port 9222 is in use by stale Chrome processes, automatically finds and uses alternative port (9223-9239) instead of failing
+- **Renderer Connection Error**: Fixed "unable to connect to renderer" error that was caused by port conflicts preventing Chrome from starting
+- **Stale Chrome Process Handling**: Better handling when port is occupied by orphaned Chrome processes from suspended browser service
+
+### Changed
+
+- **Dynamic Port Assignment**: Browser manager now automatically finds available port when default port (9222) is occupied
+- **Port Availability Logic**: Improved port checking with proper availability detection (port is available if connection fails)
+- **Error Recovery**: When unable to connect to existing browser, creates new instance on alternative port instead of failing
+
+### Technical Details
+
+- Port availability check: Port is considered available if socket connection fails (port not in use)
+- Port range: Tries ports 9223-9239 when 9222 is unavailable
+- Debug port saved to file for future connections
+- Better error messages guide users to resolve port conflicts
+
+---
+
 ## [3.1.1] - 2025-11-03
 
 ### Fixed
