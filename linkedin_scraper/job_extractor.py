@@ -45,7 +45,7 @@ class JobExtractor:
             
             var jobsData = {};
             var cards = getElementsByAttributeValue('data-view-name', 'job-card');
-            
+            console.log(cards.length);
             for (var i = 0; i < cards.length; i++) {
                 var card = cards[i];
                 try {

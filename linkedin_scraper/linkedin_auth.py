@@ -63,7 +63,7 @@ class LinkedInAuth:
             logger.warning(f"Error checking login status: {str(e)}")
             return False
     
-    def login(self, manual_verification=False):
+    def login(self, manual_verification=True):
         """
         Perform LinkedIn login using credentials from Config.
         
@@ -184,7 +184,7 @@ class LinkedInAuth:
         logger.info(f"Current URL: {self.driver.current_url}")
         
         start_time = time.time()
-        check_interval = 5  # Check every 5 seconds
+        check_interval = 120  # Check every 5 seconds
         
         while time.time() - start_time < timeout:
             time.sleep(check_interval)

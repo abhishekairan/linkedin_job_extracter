@@ -15,10 +15,14 @@ logger = logging.getLogger(__name__)
 class BrowserManager:
     """Manages persistent Chrome browser instance with health checks."""
     
+    # Class-level driver storage for persistence across instances
+    _shared_driver = None
+    _instance_count = 0
+    
     def __init__(self):
-        """Initialize BrowserManager with no active driver."""
-        self.driver = None
+        """Initialize BrowserManager - uses shared driver instance."""
         self.config = Config
+        BrowserManager._instance_count += 1
     
     def _get_chrome_options(self):
         """
@@ -60,6 +64,7 @@ class BrowserManager:
     def launch_browser(self):
         """
         Launch a new Chrome browser instance.
+        Stores it as a class variable to persist across instances.
         
         Returns:
             webdriver.Chrome: Chrome WebDriver instance
@@ -72,11 +77,12 @@ class BrowserManager:
             service = self._create_service()
             
             logger.info(f"Launching Chrome browser on {self.config.PLATFORM}...")
-            self.driver = webdriver.Chrome(service=service, options=options)
-            self.driver.implicitly_wait(self.config.IMPLICIT_WAIT)
+            BrowserManager._shared_driver = webdriver.Chrome(service=service, options=options)
+            BrowserManager._shared_driver.implicitly_wait(self.config.IMPLICIT_WAIT)
             
-            logger.info("Browser launched successfully")
-            return self.driver
+            logger.info("Browser launched successfully and stored as persistent instance")
+            logger.info("Browser will remain open until explicitly closed or machine shutdown")
+            return BrowserManager._shared_driver
         
         except Exception as e:
             logger.error(f"Failed to launch browser: {str(e)}")
@@ -85,57 +91,109 @@ class BrowserManager:
     def is_browser_alive(self):
         """
         Check if the browser instance is still alive and responsive.
+        Uses the shared class-level driver instance.
         
         Returns:
             bool: True if browser is alive, False otherwise
         """
-        if self.driver is None:
+        if BrowserManager._shared_driver is None:
             return False
         
         try:
             # Try to execute simple JavaScript to verify browser is responsive
-            self.driver.execute_script("return 1;")
+            BrowserManager._shared_driver.execute_script("return 1;")
             return True
         except Exception as e:
             logger.warning(f"Browser health check failed: {str(e)}")
+            # If browser is dead, clear the reference
+            BrowserManager._shared_driver = None
             return False
     
     def get_or_create_browser(self):
         """
         Get existing browser instance or create a new one.
         This is the KEY METHOD for maintaining persistence.
+        Uses class-level storage to persist across script runs.
         
         Returns:
             webdriver.Chrome: Active Chrome WebDriver instance
         """
-        # Check if driver exists and is alive
-        if self.driver is not None and self.is_browser_alive():
-            logger.info("Using existing browser instance")
-            return self.driver
+        # Check if shared driver exists and is alive
+        if BrowserManager._shared_driver is not None and self.is_browser_alive():
+            logger.info("Reusing existing persistent browser instance")
+            logger.info(f"(Active instances: {BrowserManager._instance_count})")
+            return BrowserManager._shared_driver
         
         # Driver doesn't exist or is not alive - create new one
-        logger.info("Creating new browser instance")
+        logger.info("Creating new persistent browser instance")
+        logger.info("This browser will stay open until explicitly closed or machine shutdown")
         
-        # Try to quit existing driver if it exists (cleanup)
-        if self.driver is not None:
+        # Try to cleanup dead driver reference if it exists
+        if BrowserManager._shared_driver is not None:
             try:
-                self.driver.quit()
+                BrowserManager._shared_driver.quit()
             except Exception:
                 pass  # Ignore errors during cleanup
+            finally:
+                BrowserManager._shared_driver = None
         
         # Launch new browser
         return self.launch_browser()
     
-    def close_browser(self):
-        """Close the browser instance and clean up."""
-        if self.driver is not None:
+    def close_browser(self, force=False):
+        """
+        Close the browser instance and clean up.
+        
+        Args:
+            force (bool): If True, closes browser even if multiple instances exist.
+                        If False (default), only closes if this is the last instance.
+        
+        Returns:
+            bool: True if browser was closed, False otherwise
+        """
+        if BrowserManager._shared_driver is None:
+            logger.info("No browser instance to close")
+            return False
+        
+        if not force and BrowserManager._instance_count > 1:
+            logger.info(f"Not closing browser - {BrowserManager._instance_count} active instances")
+            logger.info("Use close_browser(force=True) to force close")
+            return False
+        
+        try:
+            BrowserManager._shared_driver.quit()
+            logger.info("Browser closed successfully")
+            return True
+        except Exception as e:
+            logger.warning(f"Error closing browser: {str(e)}")
+            return False
+        finally:
+            BrowserManager._shared_driver = None
+            BrowserManager._instance_count = 0
+    
+    @classmethod
+    def get_browser_status(cls):
+        """
+        Get status of the shared browser instance.
+        
+        Returns:
+            dict: Status information about the browser
+        """
+        has_browser = cls._shared_driver is not None
+        is_alive = False
+        
+        if has_browser:
             try:
-                self.driver.quit()
-                logger.info("Browser closed successfully")
-            except Exception as e:
-                logger.warning(f"Error closing browser: {str(e)}")
-            finally:
-                self.driver = None
+                cls._shared_driver.execute_script("return 1;")
+                is_alive = True
+            except Exception:
+                is_alive = False
+        
+        return {
+            'has_browser': has_browser,
+            'is_alive': is_alive,
+            'instance_count': cls._instance_count
+        }
     
     def __enter__(self):
         """Context manager entry - return browser instance without closing."""

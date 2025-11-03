@@ -61,8 +61,12 @@ def scrape_linkedin_jobs(keywords, location=None, num_results=25):
         # Check if already logged in
         if not auth.is_logged_in():
             logger.info("Not logged in, attempting login...")
-            if not auth.login():
+            # Attempt login with manual verification enabled
+            # Set manual_verification=False to disable manual verification prompt
+            login_success = auth.login(manual_verification=True)
+            if not login_success:
                 logger.error("Login failed. Exiting.")
+                logger.info("Tip: If CAPTCHA/verification was required, check if HEADLESS_MODE=False in .env")
                 return {}
         else:
             logger.info("Already authenticated")
@@ -119,6 +123,9 @@ def main():
         logger.warning("No jobs extracted")
     
     logger.info("Job scraping completed")
+    logger.info("Note: Browser instance remains open to maintain session")
+    logger.info("Next script run will reuse the existing browser instance")
+    logger.info("To close browser manually, use: browser_manager.close_browser(force=True)")
 
 
 if __name__ == "__main__":
