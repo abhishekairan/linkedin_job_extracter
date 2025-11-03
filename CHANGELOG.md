@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2025-11-03
+
+### Fixed
+
+- **Chrome DevTools Protocol Verification**: Enhanced remote connection check to verify Chrome DevTools Protocol is actually responding, not just that port is open
+- **Port Conflict Detection**: Added detection of port conflicts before attempting to create new browser instances
+- **Xvfb Verification**: Added verification that Xvfb is actually running and accessible before using display :99
+- **Suspended Service Detection**: Better handling when browser service is suspended (Ctrl+Z) but Chrome is still running
+
+### Added
+
+- **DevTools Protocol Check**: Verifies Chrome DevTools Protocol responds before attempting remote connection
+- **Process Detection**: Checks which process is using port 9222 when conflicts occur
+- **Display Accessibility Check**: Verifies display is accessible using xdpyinfo before launching Chrome
+- **Xvfb Startup Verification**: Confirms Xvfb actually started before proceeding
+
+### Improved
+
+- **Better Error Messages**: More specific messages about suspended services and port conflicts
+- **Xvfb Startup Reliability**: Increased wait time and added verification step
+- **Port Conflict Warnings**: Clear warnings when port is in use and guidance on resolution
+
+---
+
 ## [3.1.0] - 2025-11-03
 
 ### Fixed

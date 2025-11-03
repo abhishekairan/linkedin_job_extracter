@@ -105,11 +105,35 @@ class BrowserManager:
                     if not result.stdout.strip():
                         # Start Xvfb
                         logger.info("Starting Xvfb on display :99...")
-                        subprocess.Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24', 
-                                         '-ac', '+extension', 'GLX', '+render', '-noreset'],
-                                       stdout=subprocess.DEVNULL, 
-                                       stderr=subprocess.DEVNULL)
-                        time.sleep(2)  # Wait for Xvfb to start
+                        process = subprocess.Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24', 
+                                                   '-ac', '+extension', 'GLX', '+render', '-noreset'],
+                                                  stdout=subprocess.DEVNULL, 
+                                                  stderr=subprocess.DEVNULL)
+                        time.sleep(3)  # Wait for Xvfb to start
+                        # Verify Xvfb started successfully
+                        check_result = subprocess.run(['pgrep', '-f', 'Xvfb :99'], 
+                                                     capture_output=True, text=True)
+                        if not check_result.stdout.strip():
+                            logger.error("Xvfb failed to start. Check if Xvfb is installed.")
+                            raise RuntimeError("Xvfb failed to start")
+                        logger.info("✓ Xvfb started successfully")
+                    else:
+                        logger.info("✓ Xvfb is already running on :99")
+                    
+                    # Verify display is accessible (optional check)
+                    try:
+                        import subprocess
+                        test_result = subprocess.run(['xdpyinfo', '-display', ':99'], 
+                                                    capture_output=True, text=True, timeout=2)
+                        if test_result.returncode == 0:
+                            logger.info("✓ Display :99 is accessible")
+                        else:
+                            logger.debug("xdpyinfo check failed, but proceeding (xdpyinfo may not be installed)")
+                    except FileNotFoundError:
+                        logger.debug("xdpyinfo not available (optional tool), skipping display verification")
+                    except Exception:
+                        logger.debug("Could not verify display, but proceeding anyway")
+                    
                     os.environ['DISPLAY'] = ':99'
                     logger.info("✓ DISPLAY set to :99")
                 except FileNotFoundError:
@@ -162,6 +186,19 @@ class BrowserManager:
             
             # Launch new browser with remote debugging enabled
             debug_port = DEFAULT_DEBUG_PORT
+            
+            # Check if port is already in use
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            port_in_use = sock.connect_ex(('127.0.0.1', debug_port)) == 0
+            sock.close()
+            
+            if port_in_use:
+                logger.warning(f"Port {debug_port} is already in use. Chrome may fail to start.")
+                logger.warning("This usually means another Chrome instance is running.")
+                logger.warning("Consider: 1) Resuming suspended browser service (fg), or 2) Killing existing Chrome processes")
+            
             options = self._get_chrome_options(use_remote_debugging=False, debug_port=debug_port)
             service = self._create_service()
             
@@ -170,7 +207,18 @@ class BrowserManager:
             logger.info(f"Chrome binary: {self.config.CHROME_BINARY_PATH or 'System default'}")
             logger.info(f"Headless mode: {self.config.HEADLESS_MODE}")
             import os
-            logger.info(f"DISPLAY: {os.getenv('DISPLAY', 'Not set')}")
+            display = os.getenv('DISPLAY', 'Not set')
+            logger.info(f"DISPLAY: {display}")
+            
+            # Verify Xvfb if using display
+            if not self.config.HEADLESS_MODE and display.startswith(':99'):
+                import subprocess
+                xvfb_check = subprocess.run(['pgrep', '-f', 'Xvfb :99'], 
+                                            capture_output=True, text=True)
+                if not xvfb_check.stdout.strip():
+                    logger.error("DISPLAY=:99 but Xvfb is not running!")
+                    logger.error("Please start Xvfb: Xvfb :99 -screen 0 1920x1080x24 &")
+                    raise RuntimeError("Xvfb not running but DISPLAY set to :99")
             
             # Additional options for non-headless stability
             if not self.config.HEADLESS_MODE:
@@ -293,25 +341,59 @@ class BrowserManager:
                     logger.info("Attempting to connect to browser service via remote debugging...")
                     # Test if Chrome is actually accessible on the debug port
                     import socket
+                    import urllib.request
+                    import json as json_lib
+                    
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(2)
                     result = sock.connect_ex(('127.0.0.1', debug_port))
                     sock.close()
                     
                     if result == 0:
-                        # Port is open, try to connect
-                        driver = self.launch_browser(use_remote_debugging=True)
-                        # Verify connection works
-                        if self.is_browser_alive():
-                            logger.info("✓ Connected to browser service successfully")
-                            BrowserManager._shared_driver = driver
-                            return driver
-                        else:
-                            logger.warning("Failed to connect to remote browser (browser not responsive)")
+                        # Port is open, verify Chrome DevTools Protocol is responding
+                        try:
+                            # Try to get Chrome DevTools Protocol info
+                            response = urllib.request.urlopen(
+                                f'http://127.0.0.1:{debug_port}/json/version', 
+                                timeout=2
+                            )
+                            chrome_info = json_lib.loads(response.read())
+                            logger.debug(f"Chrome DevTools Protocol responding: {chrome_info.get('Browser', 'Unknown')}")
+                        except Exception as e:
+                            logger.warning(f"Port {debug_port} is open but Chrome DevTools Protocol not responding: {str(e)}")
+                            logger.warning("Browser service may be suspended or Chrome crashed. Will create new instance.")
+                            # Check if port is actually occupied by Chrome or something else
+                            import subprocess
                             try:
-                                driver.quit()
+                                result = subprocess.run(['lsof', '-ti', f':{debug_port}'], 
+                                                       capture_output=True, text=True, timeout=2)
+                                if result.returncode == 0 and result.stdout.strip():
+                                    logger.warning(f"Port {debug_port} is occupied by process: {result.stdout.strip()}")
+                                    logger.warning("This might be a stale Chrome process. Consider restarting browser service.")
                             except:
                                 pass
+                            # Skip connection attempt
+                            result = 1  # Force skip
+                        
+                        if result == 0:
+                            # Port is open and Chrome DevTools Protocol is responding, try to connect
+                            try:
+                                driver = self.launch_browser(use_remote_debugging=True)
+                                # Verify connection works with a quick test
+                                driver.current_url  # This will fail if connection doesn't work
+                                if self.is_browser_alive():
+                                    logger.info("✓ Connected to browser service successfully")
+                                    BrowserManager._shared_driver = driver
+                                    return driver
+                                else:
+                                    logger.warning("Failed to connect to remote browser (browser not responsive)")
+                                    try:
+                                        driver.quit()
+                                    except:
+                                        pass
+                            except Exception as conn_error:
+                                logger.warning(f"Failed to establish connection to Chrome: {str(conn_error)}")
+                                logger.info("Will create new browser instance")
                     else:
                         logger.warning(f"Chrome debug port {debug_port} is not accessible. Browser service may have stopped.")
                         logger.info("Will create new browser instance")
@@ -322,6 +404,20 @@ class BrowserManager:
         # Driver doesn't exist or is not alive - create new one
         logger.info("Creating new persistent browser instance")
         logger.info("This browser will stay open until explicitly closed or machine shutdown")
+        
+        # Check if port 9222 is in use before trying to create new browser
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        port_check = sock.connect_ex(('127.0.0.1', DEFAULT_DEBUG_PORT))
+        sock.close()
+        
+        if port_check == 0:
+            logger.warning(f"Port {DEFAULT_DEBUG_PORT} is already in use. This might conflict with new browser instance.")
+            logger.warning("If browser service is suspended, resume it with: fg")
+            logger.warning("Or kill existing Chrome processes and restart browser service.")
+            # Try a different port or give user option
+            logger.info("Attempting to use existing browser on port, or will try to launch anyway...")
         
         # Try to cleanup dead driver reference if it exists
         if BrowserManager._shared_driver is not None:
