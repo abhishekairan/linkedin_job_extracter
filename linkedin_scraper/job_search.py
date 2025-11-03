@@ -70,19 +70,58 @@ class JobSearch:
             # Add human-like delay before interacting with page
             SecurityManager.random_delay(2, 4)
             
-            # Wait for job cards to appear using data-view-name attribute (more reliable)
-            logger.info("Waiting for job cards to load...")
-            try:
-                # Try the more reliable data-view-name selector first
-                self.wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "[data-view-name='job-card']"))
-                )
-            except TimeoutException:
-                # Fallback to class selector if data-view-name doesn't work
-                logger.warning("data-view-name selector not found, trying class selector...")
-                self.wait.until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "base-card"))
-                )
+            # Wait for job cards using JavaScript injection (bypasses LinkedIn blocking)
+            logger.info("Waiting for job cards to load using JavaScript...")
+            
+            # Use JavaScript to detect job cards since LinkedIn blocks Selenium selectors
+            max_attempts = 10
+            attempt = 0
+            jobs_found = False
+            
+            while attempt < max_attempts and not jobs_found:
+                attempt += 1
+                time.sleep(2)  # Wait for page to render
+                
+                # Use JavaScript to check if job cards are present
+                card_count = self.driver.execute_script("""
+                    // Try multiple methods to find job cards
+                    var cards = [];
+                    
+                    // Method 1: data-view-name attribute
+                    cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+                    
+                    // Method 2: base-card class
+                    if (cards.length === 0) {
+                        cards = Array.from(document.querySelectorAll('.base-card'));
+                    }
+                    
+                    // Method 3: jobs-list-item class
+                    if (cards.length === 0) {
+                        cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
+                    }
+                    
+                    // Method 4: Any element with job link
+                    if (cards.length === 0) {
+                        var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
+                        cards = links.map(link => link.closest('li') || link.parentElement).filter(Boolean);
+                    }
+                    
+                    return cards.length;
+                """)
+                
+                if card_count > 0:
+                    logger.info(f"Found {card_count} job cards")
+                    jobs_found = True
+                    break
+                else:
+                    logger.debug(f"Waiting for job cards... (attempt {attempt}/{max_attempts})")
+            
+            if not jobs_found:
+                logger.error("No job cards found after waiting. LinkedIn may be blocking or page structure changed.")
+                return False
+            
+            # Additional wait to ensure cards are fully loaded
+            SecurityManager.random_delay(1, 2)
             
             # Scroll to load all available results (ignores num_results limit)
             self._scroll_to_load_more(num_results)
@@ -125,12 +164,37 @@ class JobSearch:
                 # Human-like scroll delay
                 SecurityManager.human_like_scroll_delay()
                 
-                # Get current count of loaded job cards using data-view-name selector
-                jobs = self.driver.find_elements(By.CSS_SELECTOR, "[data-view-name='job-card']")
-                if not jobs:
-                    # Fallback to class selector
-                    jobs = self.driver.find_elements(By.CLASS_NAME, "base-card")
-                loaded_count = len(jobs)
+                # Get current count using JavaScript (bypasses LinkedIn blocking)
+                loaded_count = self.driver.execute_script("""
+                    // Try multiple methods to count job cards
+                    var cards = [];
+                    
+                    // Method 1: data-view-name attribute
+                    cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+                    
+                    // Method 2: base-card class
+                    if (cards.length === 0) {
+                        cards = Array.from(document.querySelectorAll('.base-card'));
+                    }
+                    
+                    // Method 3: jobs-list-item class
+                    if (cards.length === 0) {
+                        cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
+                    }
+                    
+                    // Method 4: Any element with job link
+                    if (cards.length === 0) {
+                        var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
+                        var uniqueCards = new Set();
+                        links.forEach(link => {
+                            var card = link.closest('li') || link.closest('.base-card') || link.parentElement;
+                            if (card) uniqueCards.add(card);
+                        });
+                        cards = Array.from(uniqueCards);
+                    }
+                    
+                    return cards.length;
+                """)
                 
                 logger.info(f"Loaded {loaded_count} jobs")
                 

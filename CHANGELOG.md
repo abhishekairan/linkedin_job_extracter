@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.3] - 2025-11-03
+
+### Fixed
+
+- **False Manual Login Trigger**: Fixed issue where manual login was triggered even when user was already logged in
+  - Improved `is_logged_in()` to use URL-based detection (LinkedIn feed is only accessible when logged in)
+  - Added JavaScript-based login verification to avoid unnecessary navigation
+  - Now properly detects logged-in state without triggering verification prompts
+
+- **Job Cards Detection**: Fixed timeout waiting for job cards by using JavaScript injection instead of Selenium selectors
+  - LinkedIn blocks Selenium selectors, so now uses client-side JavaScript to detect job cards
+  - Multiple fallback methods: data-view-name, base-card class, jobs-list-item, and job links
+  - Bypasses LinkedIn's blocking mechanism by executing JavaScript directly in browser
+
+- **Browser Service Connection**: Improved connection logic to better handle suspended services
+  - Better detection of Chrome processes on debug port
+  - Clearer warnings when service is suspended vs crashed
+  - More informative messages guiding users to resume service
+
+### Changed
+
+- **Login Detection**: Now primarily uses URL-based detection (can access /feed/ = logged in)
+- **Job Card Detection**: Completely rewritten to use JavaScript injection with multiple fallback methods
+- **Scrolling Logic**: Updated to use JavaScript for counting job cards instead of Selenium find_elements
+
+### Technical Details
+
+- Login check: Verifies URL first, then uses JavaScript to confirm login status
+- Job cards: JavaScript injection with 4 different detection methods as fallbacks
+- Browser connection: Enhanced process detection to distinguish suspended vs crashed services
+
+---
+
 ## [3.1.2] - 2025-11-03
 
 ### Fixed

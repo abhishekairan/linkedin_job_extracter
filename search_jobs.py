@@ -96,19 +96,20 @@ def search_jobs_standalone(keywords, location=None, num_results=None):
         security_manager.rate_limit_search()
         
         # Check if browser service is running
-        if not wait_for_service():
-            logger.error("Browser service is not running.")
-            logger.error("Please start the browser service first:")
-            logger.error("  python browser_service.py")
-            return {}
+        service_running = wait_for_service()
+        if not service_running:
+            logger.warning("Browser service status file indicates it's not running.")
+            logger.warning("This might be OK if browser service was suspended (Ctrl+Z)")
+            logger.warning("Will attempt to connect to existing browser anyway...")
         
         # Validate configuration
         Config.validate()
         
         # Get browser instance from browser manager
-        # This will reuse the existing browser from the service
+        # This will reuse the existing browser from the service, or create new one if needed
+        # try_remote_connection=True allows connecting to browser service
         browser_manager = BrowserManager()
-        driver = browser_manager.get_or_create_browser()
+        driver = browser_manager.get_or_create_browser(try_remote_connection=True)
         
         # Verify we can access the browser
         if not browser_manager.is_browser_alive():

@@ -379,18 +379,38 @@ class BrowserManager:
                             logger.debug(f"Chrome DevTools Protocol responding: {chrome_info.get('Browser', 'Unknown')}")
                         except Exception as e:
                             logger.warning(f"Port {debug_port} is open but Chrome DevTools Protocol not responding: {str(e)}")
-                            logger.warning("Browser service may be suspended or Chrome crashed. Will create new instance.")
-                            # Check if port is actually occupied by Chrome or something else
+                            
+                            # Check if port is actually occupied by Chrome
                             import subprocess
+                            chrome_on_port = False
                             try:
-                                result = subprocess.run(['lsof', '-ti', f':{debug_port}'], 
-                                                       capture_output=True, text=True, timeout=2)
-                                if result.returncode == 0 and result.stdout.strip():
-                                    logger.warning(f"Port {debug_port} is occupied by process: {result.stdout.strip()}")
-                                    logger.warning("This might be a stale Chrome process. Consider restarting browser service.")
+                                lsof_result = subprocess.run(['lsof', '-ti', f':{debug_port}'], 
+                                                             capture_output=True, text=True, timeout=2)
+                                if lsof_result.returncode == 0 and lsof_result.stdout.strip():
+                                    pids = lsof_result.stdout.strip().split('\n')
+                                    logger.warning(f"Port {debug_port} is occupied by process(es): {', '.join(pids)}")
+                                    
+                                    # Check if it's a Chrome process
+                                    for pid in pids:
+                                        try:
+                                            ps_result = subprocess.run(['ps', '-p', pid, '-o', 'comm='], 
+                                                                      capture_output=True, text=True, timeout=1)
+                                            if 'chrome' in ps_result.stdout.lower() or 'chromium' in ps_result.stdout.lower():
+                                                chrome_on_port = True
+                                                break
+                                        except:
+                                            pass
                             except:
                                 pass
-                            # Skip connection attempt
+                            
+                            if chrome_on_port:
+                                logger.warning("Chrome process detected on port but DevTools not responding.")
+                                logger.warning("Browser service may be suspended. Try: fg (to resume) or restart browser_service.py")
+                                logger.warning("Will create new browser instance on alternative port to continue...")
+                            else:
+                                logger.warning("Port in use by non-Chrome process. Will use alternative port.")
+                            
+                            # Skip connection attempt - will create new browser below
                             result = 1  # Force skip
                         
                         if result == 0:

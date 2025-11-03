@@ -35,20 +35,62 @@ class LinkedInAuth:
         Check if user is currently logged into LinkedIn.
         This is a CRITICAL method for avoiding unnecessary logins.
         
+        Uses URL-based detection: If we can access /feed/ URL, user is logged in.
+        LinkedIn redirects to login if not authenticated.
+        
         Returns:
             bool: True if logged in, False otherwise
         """
         try:
             logger.info("Checking login status...")
-            self.driver.get(self.LINKEDIN_HOME_URL)
-            time.sleep(2)  # Wait for page load
             
-            # Check if redirected to login page
-            if "login" in self.driver.current_url.lower():
-                logger.info("Not logged in - redirected to login page")
+            # Get current URL first to avoid unnecessary navigation
+            current_url = self.driver.current_url.lower()
+            
+            # If already on feed page, use JavaScript to check login status
+            if "/feed/" in current_url or current_url == "https://www.linkedin.com/" or current_url == "https://www.linkedin.com":
+                try:
+                    # Use JavaScript to check if we're actually logged in
+                    # LinkedIn's feed page is only accessible when logged in
+                    logged_in = self.driver.execute_script("""
+                        // Check if we're on the feed page (logged in users can access this)
+                        if (window.location.pathname === '/feed/' || 
+                            window.location.pathname === '/' && 
+                            !window.location.href.includes('login')) {
+                            return true;
+                        }
+                        // Check for login page indicators
+                        if (window.location.href.includes('login') || 
+                            document.querySelector('input[type="password"]')) {
+                            return false;
+                        }
+                        return true; // Default to true if on LinkedIn domain
+                    """)
+                    
+                    if logged_in:
+                        logger.info("Already logged into LinkedIn")
+                        return True
+                except:
+                    pass
+            
+            # Navigate to feed URL - LinkedIn redirects to login if not authenticated
+            self.driver.get(self.LINKEDIN_HOME_URL)
+            time.sleep(2)  # Wait for redirect/page load
+            
+            # Check final URL - if redirected to login, not logged in
+            final_url = self.driver.current_url.lower()
+            
+            if "login" in final_url or "/checkpoint/" in final_url:
+                logger.info("Not logged in - redirected to login/checkpoint page")
                 return False
             
-            # Try to find feed content (indicates successful login)
+            # If we're on feed page or home page, user is logged in
+            # LinkedIn feed is ONLY accessible to logged-in users
+            if "/feed/" in final_url or (final_url == "https://www.linkedin.com/" and "login" not in final_url):
+                logger.info("Already logged into LinkedIn (verified via feed access)")
+                return True
+            
+            # Fallback: Try to find feed content
             try:
                 self.wait.until(
                     EC.presence_of_element_located((By.CLASS_NAME, "scaffold-finite-scroll__content"))
@@ -56,7 +98,19 @@ class LinkedInAuth:
                 logger.info("Already logged into LinkedIn")
                 return True
             except TimeoutException:
-                logger.warning("Could not find feed content - assuming not logged in")
+                # Last check: use JavaScript to verify
+                try:
+                    has_feed = self.driver.execute_script("""
+                        return document.querySelector('.scaffold-finite-scroll__content') !== null ||
+                               document.querySelector('main') !== null;
+                    """)
+                    if has_feed:
+                        logger.info("Already logged into LinkedIn")
+                        return True
+                except:
+                    pass
+                
+                logger.warning("Could not verify login status - assuming not logged in")
                 return False
         
         except Exception as e:
