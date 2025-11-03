@@ -1,8 +1,11 @@
 """
 Browser instance management module.
 Handles persistent Chrome browser instances with health checks.
+Supports remote debugging for cross-process browser sharing.
 """
 import logging
+import json
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -10,6 +13,10 @@ from selenium.common.exceptions import WebDriverException
 from .config import Config
 
 logger = logging.getLogger(__name__)
+
+# Remote debugging port file
+DEBUG_PORT_FILE = Path(__file__).parent.parent / 'browser_debug_port.json'
+DEFAULT_DEBUG_PORT = 9222
 
 
 class BrowserManager:
@@ -24,9 +31,13 @@ class BrowserManager:
         self.config = Config
         BrowserManager._instance_count += 1
     
-    def _get_chrome_options(self):
+    def _get_chrome_options(self, use_remote_debugging=False, debug_port=None):
         """
         Create and configure Chrome options.
+        
+        Args:
+            use_remote_debugging (bool): If True, enable remote debugging port
+            debug_port (int, optional): Remote debugging port number
         
         Returns:
             Options: Configured Chrome options object
@@ -40,11 +51,37 @@ class BrowserManager:
         # Add required arguments for Linux servers
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
+        
+        # Stealth and anti-detection options
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_argument('--start-maximized')
+        options.add_argument('--disable-web-security')
+        options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+        options.add_argument('--disable-background-networking')
+        options.add_argument('--disable-background-timer-throttling')
+        options.add_argument('--disable-default-apps')
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-sync')
+        options.add_argument('--disable-translate')
+        options.add_argument('--metrics-recording-only')
+        options.add_argument('--no-first-run')
+        options.add_argument('--password-store=basic')
         
-        # Set user agent
-        options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        # Set random realistic user agent
+        from .security import SecurityManager
+        user_agent = SecurityManager.get_random_user_agent()
+        options.add_argument(f'user-agent={user_agent}')
+        
+        # Remote debugging for cross-process access
+        if use_remote_debugging:
+            port = debug_port or DEFAULT_DEBUG_PORT
+            options.add_experimental_option("debuggerAddress", f"127.0.0.1:{port}")
+            logger.info(f"Using remote debugging on port {port}")
+        else:
+            # Enable remote debugging port when creating new browser
+            port = debug_port or DEFAULT_DEBUG_PORT
+            options.add_argument(f'--remote-debugging-port={port}')
+            logger.info(f"Remote debugging enabled on port {port}")
         
         # Headless mode if configured
         if self.config.HEADLESS_MODE:
@@ -61,10 +98,13 @@ class BrowserManager:
         """
         return Service(self.config.CHROMEDRIVER_PATH)
     
-    def launch_browser(self):
+    def launch_browser(self, use_remote_debugging=False):
         """
-        Launch a new Chrome browser instance.
+        Launch a new Chrome browser instance or connect to existing one via remote debugging.
         Stores it as a class variable to persist across instances.
+        
+        Args:
+            use_remote_debugging (bool): If True, connect to existing browser via remote debugging
         
         Returns:
             webdriver.Chrome: Chrome WebDriver instance
@@ -73,12 +113,36 @@ class BrowserManager:
             WebDriverException: If browser launch fails
         """
         try:
-            options = self._get_chrome_options()
+            # Check if we should connect to existing browser
+            if use_remote_debugging:
+                debug_port = self._get_debug_port()
+                if debug_port:
+                    logger.info(f"Connecting to existing browser on remote debugging port {debug_port}...")
+                    options = self._get_chrome_options(use_remote_debugging=True, debug_port=debug_port)
+                    # No service needed when connecting to existing browser
+                    BrowserManager._shared_driver = webdriver.Chrome(options=options)
+                    BrowserManager._shared_driver.implicitly_wait(self.config.IMPLICIT_WAIT)
+                    logger.info("Successfully connected to existing browser instance")
+                    return BrowserManager._shared_driver
+            
+            # Launch new browser with remote debugging enabled
+            debug_port = DEFAULT_DEBUG_PORT
+            options = self._get_chrome_options(use_remote_debugging=False, debug_port=debug_port)
             service = self._create_service()
             
             logger.info(f"Launching Chrome browser on {self.config.PLATFORM}...")
             BrowserManager._shared_driver = webdriver.Chrome(service=service, options=options)
             BrowserManager._shared_driver.implicitly_wait(self.config.IMPLICIT_WAIT)
+            
+            # Inject stealth scripts to prevent detection
+            try:
+                from .security import SecurityManager
+                SecurityManager.inject_stealth_scripts(BrowserManager._shared_driver)
+            except Exception as e:
+                logger.warning(f"Failed to inject stealth scripts: {str(e)}")
+            
+            # Save debug port info
+            self._save_debug_port(debug_port)
             
             logger.info("Browser launched successfully and stored as persistent instance")
             logger.info("Browser will remain open until explicitly closed or machine shutdown")
@@ -87,6 +151,26 @@ class BrowserManager:
         except Exception as e:
             logger.error(f"Failed to launch browser: {str(e)}")
             raise WebDriverException(f"Browser launch failed: {str(e)}")
+    
+    def _save_debug_port(self, port):
+        """Save remote debugging port to file."""
+        try:
+            data = {'port': port, 'timestamp': str(Path(__file__).stat().st_mtime)}
+            with open(DEBUG_PORT_FILE, 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            logger.warning(f"Failed to save debug port: {str(e)}")
+    
+    def _get_debug_port(self):
+        """Get remote debugging port from file."""
+        try:
+            if DEBUG_PORT_FILE.exists():
+                with open(DEBUG_PORT_FILE, 'r') as f:
+                    data = json.load(f)
+                    return data.get('port', DEFAULT_DEBUG_PORT)
+        except Exception as e:
+            logger.warning(f"Failed to read debug port: {str(e)}")
+        return DEFAULT_DEBUG_PORT
     
     def is_browser_alive(self):
         """
@@ -109,11 +193,15 @@ class BrowserManager:
             BrowserManager._shared_driver = None
             return False
     
-    def get_or_create_browser(self):
+    def get_or_create_browser(self, try_remote_connection=True):
         """
         Get existing browser instance or create a new one.
         This is the KEY METHOD for maintaining persistence.
         Uses class-level storage to persist across script runs.
+        Can connect to browser from another process via remote debugging.
+        
+        Args:
+            try_remote_connection (bool): If True, try to connect to browser from another process
         
         Returns:
             webdriver.Chrome: Active Chrome WebDriver instance
@@ -123,6 +211,28 @@ class BrowserManager:
             logger.info("Reusing existing persistent browser instance")
             logger.info(f"(Active instances: {BrowserManager._instance_count})")
             return BrowserManager._shared_driver
+        
+        # Try to connect to browser from another process via remote debugging
+        if try_remote_connection:
+            try:
+                debug_port = self._get_debug_port()
+                if DEBUG_PORT_FILE.exists():
+                    logger.info("Attempting to connect to browser service via remote debugging...")
+                    driver = self.launch_browser(use_remote_debugging=True)
+                    # Verify connection works
+                    if self.is_browser_alive():
+                        logger.info("✓ Connected to browser service successfully")
+                        BrowserManager._shared_driver = driver
+                        return driver
+                    else:
+                        logger.warning("Failed to connect to remote browser")
+                        try:
+                            driver.quit()
+                        except:
+                            pass
+            except Exception as e:
+                logger.debug(f"Could not connect to remote browser: {str(e)}")
+                logger.info("Will create new browser instance")
         
         # Driver doesn't exist or is not alive - create new one
         logger.info("Creating new persistent browser instance")

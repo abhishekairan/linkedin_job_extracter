@@ -1,6 +1,12 @@
 """
-Main entry point for LinkedIn Job Scraper.
+Main entry point for LinkedIn Job Scraper (Legacy Mode).
 Orchestrates all modules to search and extract job listings.
+
+NOTE: This is a legacy single-script mode. For production use, please use:
+- browser_service.py (standalone browser/login service)
+- search_jobs.py (standalone job search/extract service)
+
+See PROJECT.md for the recommended service architecture.
 """
 import logging
 import sys
@@ -26,9 +32,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-# Add project to Python path
-sys.path.insert(0, str(Path(__file__).parent))
 
 
 def scrape_linkedin_jobs(keywords, num_results, location=None ):
