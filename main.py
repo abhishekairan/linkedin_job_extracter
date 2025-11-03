@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-def scrape_linkedin_jobs(keywords, location=None, num_results=25):
+def scrape_linkedin_jobs(keywords, num_results, location=None ):
     """
     Main function to scrape LinkedIn jobs.
     
@@ -99,7 +99,7 @@ def main():
     num_results = 25
     
     # Scrape jobs
-    results = scrape_linkedin_jobs(keywords, location, num_results)
+    results = scrape_linkedin_jobs(keywords, num_results, location)
     
     if results:
         # Print results

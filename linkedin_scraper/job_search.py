@@ -66,7 +66,7 @@ class JobSearch:
                     EC.presence_of_element_located((By.CLASS_NAME, "base-card"))
                 )
             
-            # Scroll to load more results
+            # Scroll to load all available results (ignores num_results limit)
             self._scroll_to_load_more(num_results)
             
             logger.info("Job search completed successfully")
@@ -83,22 +83,24 @@ class JobSearch:
         """
         Scroll page to load more job results dynamically.
         This is a PRIVATE method.
+        Continues scrolling until no more jobs are loaded.
         
         Args:
-            target_count (int): Target number of job cards to load
+            target_count (int): Target number of job cards to load (ignored - loads all available)
         
         Returns:
             bool: True if scrolling completed
         """
         try:
             loaded_count = 0
+            previous_count = 0
             scroll_pause_time = 1
-            max_scrolls = 50  # Prevent infinite scrolling
-            scroll_count = 0
+            no_change_count = 0  # Track consecutive scrolls with no new jobs
+            max_no_change = 3  # Stop after 3 consecutive scrolls with no new jobs
             
-            logger.info(f"Scrolling to load {target_count} job results...")
+            logger.info("Scrolling to load all available job results...")
             
-            while loaded_count < target_count and scroll_count < max_scrolls:
+            while True:
                 # Scroll to bottom of page
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(scroll_pause_time)
@@ -110,16 +112,18 @@ class JobSearch:
                     jobs = self.driver.find_elements(By.CLASS_NAME, "base-card")
                 loaded_count = len(jobs)
                 
-                logger.info(f"Loaded {loaded_count} out of {target_count} jobs")
+                logger.info(f"Loaded {loaded_count} jobs")
                 
-                # Check if we've reached target
-                if loaded_count >= target_count:
-                    break
+                # Check if no new jobs were loaded
+                if loaded_count == previous_count:
+                    no_change_count += 1
+                    if no_change_count >= max_no_change:
+                        logger.info(f"No more jobs loading. Stopped at {loaded_count} jobs")
+                        break
+                else:
+                    no_change_count = 0  # Reset counter if new jobs were found
                 
-                scroll_count += 1
-            
-            if scroll_count >= max_scrolls:
-                logger.warning(f"Reached max scrolls. Loaded {loaded_count} jobs instead of {target_count}")
+                previous_count = loaded_count
             
             return True
         
