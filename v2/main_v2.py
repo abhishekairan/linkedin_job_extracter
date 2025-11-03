@@ -1,27 +1,5 @@
-import importlib
-import subprocess
-import sys
 import time
 import os
-
-def ensure_packages(pkgs):
-    """Ensure packages (list of dicts with keys 'package' and 'module') are installed.
-    Installs missing packages using pip.
-    """
-    for pkg in pkgs:
-        try:
-            importlib.import_module(pkg["module"])
-        except ImportError:
-            print(f"Package '{pkg['package']}' not found. Installing...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg["package"]])
-
-# Ensure required packages are present
-ensure_packages([
-    {"package": "selenium", "module": "selenium"},
-    {"package": "webdriver-manager", "module": "webdriver_manager"},
-    {"package": "selenium-stealth", "module": "selenium_stealth"},
-    {"package": "python-dotenv", "module": "dotenv"},
-])
 
 from selenium import webdriver
 from selenium_stealth import stealth
@@ -45,8 +23,34 @@ if not os.getenv("LINKEDIN_USERNAME") or not os.getenv("LINKEDIN_PASSWORD"):
 options = Options()
 options.headless = False
 options.add_argument("--disable-blink-features=AutomationControlled")
+# Common user-agent; override if needed
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36")
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+# Helpful flags for Linux / container / headless environments
+# - --no-sandbox and --disable-dev-shm-usage are commonly required when running in containers
+# - --headless=new uses the new headless mode in newer Chrome; fall back to --headless if needed
+if os.getenv("HEADLESS", "0") in ("1", "true", "True"):
+    # Chrome new headless mode if supported
+    try:
+        options.add_argument("--headless=new")
+    except Exception:
+        options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-extensions")
+options.add_argument("--disable-background-networking")
+options.add_argument("--disable-default-apps")
+
+# Allow specifying custom Chrome/Chromium binary via env var (useful in CI / custom installs)
+chrome_bin = os.getenv("CHROME_BIN")
+if chrome_bin:
+    options.binary_location = chrome_bin
+
+# Create a Service with a chromedriver verbose log path to help debug session failures
+service = Service(ChromeDriverManager().install(), log_path="chromedriver.log")
+driver = webdriver.Chrome(service=service, options=options)
 stealth(driver,
         languages=["en-US", "en"],
         vendor="Google Inc.",
