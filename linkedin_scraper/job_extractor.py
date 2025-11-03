@@ -24,8 +24,9 @@ class JobExtractor:
     def extract_jobs(self):
         """
         Extract job IDs and links using JavaScript injection.
-        Uses data-view-name='job-card' and data-job-id attributes for reliable extraction.
-        This method bypasses LinkedIn's HTML protection by using JavaScript injection.
+        Uses data-view-name='job-card' selector for more reliable extraction.
+        Based on v2 implementation approach.
+        This is the PRIMARY extraction method.
         
         Returns:
             dict: Dictionary mapping job_id to job_link
@@ -34,75 +35,47 @@ class JobExtractor:
         try:
             logger.info("Injecting JavaScript to extract job cards...")
             
-            # JavaScript to extract job data using data-view-name and data-job-id attributes
-            # This bypasses LinkedIn's HTML protection which returns scripts instead of raw HTML
+            # JavaScript to extract job data using data-view-name attribute
+            # This approach is more stable as it targets LinkedIn's data attributes
             js_script = """
-            (function() {
-                // Get all job cards using data-view-name attribute
-                var cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
-                var jobsData = {};
-                
-                for (var i = 0; i < cards.length; i++) {
-                    var card = cards[i];
-                    try {
-                        // Get job ID directly from data-job-id attribute
-                        var jobId = card.getAttribute('data-job-id');
-                        
-                        // If data-job-id not found, try to get from parent element
-                        if (!jobId) {
-                            var parent = card.closest('[data-job-id]');
-                            if (parent) {
-                                jobId = parent.getAttribute('data-job-id');
-                            }
-                        }
-                        
-                        // If still no job ID, try extracting from link
-                        if (!jobId) {
-                            var linkElement = card.querySelector('.base-card__full-link') || 
-                                             card.querySelector('a[href*="/jobs/view/"]') ||
-                                             card.querySelector('a[data-tracking-control-name*="job"]');
-                            if (linkElement) {
-                                var href = linkElement.getAttribute('href');
-                                if (href) {
-                                    var match = href.match(/\\/jobs\\/view\\/(\\d+)\\/?/);
-                                    if (match && match[1]) {
-                                        jobId = match[1];
-                                    }
+            // Helper function to get elements by attribute value (from v2)
+            function getElementsByAttributeValue(attribute, value) {
+                return Array.from(document.querySelectorAll(`[${attribute}='${value}']`));
+            }
+            
+            var jobsData = {};
+            var cards = getElementsByAttributeValue('data-view-name', 'job-card');
+            console.log(cards.length);
+            for (var i = 0; i < cards.length; i++) {
+                var card = cards[i];
+                try {
+                    // Try multiple selectors for link element
+                    var linkElement = card.querySelector('.base-card__full-link') || 
+                                     card.querySelector('a[href*="/jobs/view/"]') ||
+                                     card.querySelector('a[data-tracking-control-name*="job"]');
+                    
+                    if (linkElement) {
+                        var href = linkElement.getAttribute('href');
+                        if (href) {
+                            // Extract job ID from URL pattern: /jobs/view/123456/
+                            var match = href.match(/\\/jobs\\/view\\/(\\d+)\\/?/);
+                            if (match && match[1]) {
+                                var jobId = match[1];
+                                // Ensure full URL
+                                if (href.startsWith('/')) {
+                                    href = 'https://www.linkedin.com' + href;
                                 }
+                                jobsData[jobId] = href;
                             }
                         }
-                        
-                        if (jobId) {
-                            // Get job link
-                            var linkElement = card.querySelector('.base-card__full-link') || 
-                                             card.querySelector('a[href*="/jobs/view/"]') ||
-                                             card.querySelector('a[data-tracking-control-name*="job"]');
-                            
-                            var href = '';
-                            if (linkElement) {
-                                href = linkElement.getAttribute('href');
-                            }
-                            
-                            // Build full URL if relative
-                            if (href && href.startsWith('/')) {
-                                href = 'https://www.linkedin.com' + href;
-                            } else if (!href) {
-                                // Construct URL from job ID if link not found
-                                href = 'https://www.linkedin.com/jobs/view/' + jobId + '/';
-                            }
-                            
-                            // Store job data - use job ID as key
-                            jobsData[jobId] = href;
-                        }
-                    } catch (e) {
-                        // Skip this card if there's an error
-                        console.warn('Error extracting job card:', e);
-                        continue;
                     }
+                } catch (e) {
+                    // Skip this card if there's an error
+                    continue;
                 }
-                
-                return jobsData;
-            })();
+            }
+            
+            return jobsData;
             """
             
             # Execute JavaScript and get results

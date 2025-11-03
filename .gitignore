@@ -130,13 +130,6 @@ celerybeat.pid
 
 # Environments
 .env
-
-# Service status files
-browser_service_status.json
-browser_debug_port.json
-job_request.json
-job_response.json
-stop_service
 .venv
 env/
 venv/

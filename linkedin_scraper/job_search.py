@@ -8,8 +8,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-from .linkedin_auth import LinkedInAuth
-from .security import SecurityManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,6 @@ class JobSearch:
     def search_jobs(self, keywords, location=None, num_results=25):
         """
         Search for jobs on LinkedIn.
-        Checks authentication first and authenticates if needed.
         
         Args:
             keywords (str): Job search keywords (required)
@@ -44,19 +41,6 @@ class JobSearch:
             bool: True if search successful, False otherwise
         """
         try:
-            # Check authentication before searching
-            auth = LinkedInAuth(self.driver)
-            if not auth.is_logged_in():
-                logger.warning("Not authenticated. Attempting to authenticate before job search...")
-                login_success = auth.login(manual_verification=True)
-                if not login_success:
-                    logger.error("Authentication failed. Cannot proceed with job search.")
-                    logger.error("Tip: If CAPTCHA/verification is required, ensure HEADLESS_MODE=False in .env")
-                    return False
-                logger.info("✓ Authentication successful")
-            else:
-                logger.debug("Already authenticated")
-            
             logger.info(f"Searching for jobs with keywords: '{keywords}'")
             
             # Build search URL
@@ -66,9 +50,7 @@ class JobSearch:
             
             logger.info(f"Navigating to: {url}")
             self.driver.get(url)
-            
-            # Add human-like delay before interacting with page
-            SecurityManager.random_delay(2, 4)
+            time.sleep(3)  # Wait for page load
             
             # Wait for job cards to appear using data-view-name attribute (more reliable)
             logger.info("Waiting for job cards to load...")
@@ -119,11 +101,9 @@ class JobSearch:
             logger.info("Scrolling to load all available job results...")
             
             while True:
-                # Scroll to bottom of page with random intervals
+                # Scroll to bottom of page
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                
-                # Human-like scroll delay
-                SecurityManager.human_like_scroll_delay()
+                time.sleep(scroll_pause_time)
                 
                 # Get current count of loaded job cards using data-view-name selector
                 jobs = self.driver.find_elements(By.CSS_SELECTOR, "[data-view-name='job-card']")
