@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.2.1] - 2025-11-04
+## [4.2.1] - 2025-11-04
 
 ### Changed
 - **Minimized Login Process - On-Demand Authentication**
@@ -44,7 +44,7 @@ All notable changes to this project will be documented in this file.
   - Comprehensive comments explaining the optimization strategy
 
 
-## [3.2.0] - 2025-11-04
+## [4.2.0] - 2025-11-04
 
 ### Fixed
 - **ROOT FIX: Browser session creation failure ("chrome not reachable")**
@@ -73,7 +73,7 @@ All notable changes to this project will be documented in this file.
 - Simplified `LinkedInAuth.login()` to only trigger manual verification if login doesn't redirect to `/feed`
 - Removed `_requires_manual_verification()` method (no longer needed)
 
-## [3.1.4] - 2025-11-03
+## [4.1.4] - 2025-11-03
 
 ### Fixed
 
@@ -90,7 +90,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.1.3] - 2025-11-03
+## [4.1.3] - 2025-11-03
 
 ### Fixed
 
@@ -123,7 +123,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.1.2] - 2025-11-03
+## [4.1.2] - 2025-11-03
 
 ### Fixed
 
@@ -146,7 +146,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.1.1] - 2025-11-03
+## [4.1.1] - 2025-11-03
 
 ### Fixed
 
@@ -170,7 +170,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.1.0] - 2025-11-03
+## [4.1.0] - 2025-11-03
 
 ### Fixed
 
@@ -231,7 +231,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.0.0] - 2024-01-15
+## [4.0.0] - 2024-01-15
 
 ### Major Reorganization
 
@@ -307,15 +307,6 @@ This project follows [Semantic Versioning](https://semver.org/):
 - **MAJOR** version for incompatible API changes
 - **MINOR** version for new functionality in a backward-compatible manner
 - **PATCH** version for backward-compatible bug fixes
-
-## Migration Notes
-
-### From Version 3.0.0 to 3.1.0
-
-No breaking changes. The update includes:
-- Better error handling and automatic display setup
-- Improved remote connection reliability
-- Enhanced error messages for easier troubleshooting
 
 If you experience connection issues:
 1. Ensure Xvfb is installed: `sudo apt install xvfb`
