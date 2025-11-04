@@ -33,9 +33,7 @@ class LinkedInAuth:
     def is_logged_in(self):
         """
         Check if user is currently logged into LinkedIn.
-        This is a CRITICAL method for avoiding unnecessary logins.
-        
-        Uses URL-based detection: If we can access /feed/ URL, user is logged in.
+        Simple check: If browser redirects to /feed, user is logged in.
         LinkedIn redirects to login if not authenticated.
         
         Returns:
@@ -44,74 +42,33 @@ class LinkedInAuth:
         try:
             logger.info("Checking login status...")
             
-            # Get current URL first to avoid unnecessary navigation
+            # Get current URL first
             current_url = self.driver.current_url.lower()
             
-            # If already on feed page, use JavaScript to check login status
-            if "/feed/" in current_url or current_url == "https://www.linkedin.com/" or current_url == "https://www.linkedin.com":
-                try:
-                    # Use JavaScript to check if we're actually logged in
-                    # LinkedIn's feed page is only accessible when logged in
-                    logged_in = self.driver.execute_script("""
-                        // Check if we're on the feed page (logged in users can access this)
-                        if (window.location.pathname === '/feed/' || 
-                            window.location.pathname === '/' && 
-                            !window.location.href.includes('login')) {
-                            return true;
-                        }
-                        // Check for login page indicators
-                        if (window.location.href.includes('login') || 
-                            document.querySelector('input[type="password"]')) {
-                            return false;
-                        }
-                        return true; // Default to true if on LinkedIn domain
-                    """)
-                    
-                    if logged_in:
-                        logger.info("Already logged into LinkedIn")
-                        return True
-                except:
-                    pass
+            # If already on feed page, user is logged in
+            if "/feed/" in current_url:
+                logger.info("Already logged into LinkedIn (on feed page)")
+                return True
             
             # Navigate to feed URL - LinkedIn redirects to login if not authenticated
             self.driver.get(self.LINKEDIN_HOME_URL)
             time.sleep(2)  # Wait for redirect/page load
             
-            # Check final URL - if redirected to login, not logged in
+            # Check final URL - if redirected to /feed, logged in
             final_url = self.driver.current_url.lower()
             
+            if "/feed/" in final_url:
+                logger.info("Already logged into LinkedIn (redirected to feed)")
+                return True
+            
+            # If redirected to login or checkpoint, not logged in
             if "login" in final_url or "/checkpoint/" in final_url:
                 logger.info("Not logged in - redirected to login/checkpoint page")
                 return False
             
-            # If we're on feed page or home page, user is logged in
-            # LinkedIn feed is ONLY accessible to logged-in users
-            if "/feed/" in final_url or (final_url == "https://www.linkedin.com/" and "login" not in final_url):
-                logger.info("Already logged into LinkedIn (verified via feed access)")
-                return True
-            
-            # Fallback: Try to find feed content
-            try:
-                self.wait.until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "scaffold-finite-scroll__content"))
-                )
-                logger.info("Already logged into LinkedIn")
-                return True
-            except TimeoutException:
-                # Last check: use JavaScript to verify
-                try:
-                    has_feed = self.driver.execute_script("""
-                        return document.querySelector('.scaffold-finite-scroll__content') !== null ||
-                               document.querySelector('main') !== null;
-                    """)
-                    if has_feed:
-                        logger.info("Already logged into LinkedIn")
-                        return True
-                except:
-                    pass
-                
-                logger.warning("Could not verify login status - assuming not logged in")
-                return False
+            # Default: not logged in if we're not on feed
+            logger.info("Not logged in - not on feed page")
+            return False
         
         except Exception as e:
             logger.warning(f"Error checking login status: {str(e)}")
@@ -120,6 +77,7 @@ class LinkedInAuth:
     def login(self, manual_verification=True):
         """
         Perform LinkedIn login using credentials from Config.
+        Only triggers manual verification if login doesn't redirect to /feed.
         
         Args:
             manual_verification (bool): If True, allows manual verification when needed.
@@ -152,30 +110,26 @@ class LinkedInAuth:
             submit_button.click()
             logger.info("Login button clicked")
             
-            # Wait for login to process
-            time.sleep(3)
+            # Wait for login to process and redirect
+            time.sleep(5)  # Wait for redirect after login
             
-            # Check if manual verification is needed
-            if self._requires_manual_verification():
-                if manual_verification:
-                    logger.warning("Manual verification required (CAPTCHA or security challenge detected)")
-                    return self._wait_for_manual_verification()
-                else:
-                    logger.error("Login requires manual verification. Set manual_verification=True to enable manual login.")
-                    logger.info("Current URL: " + self.driver.current_url)
-                    return False
+            # Check current URL - if redirected to /feed, login was successful
+            current_url = self.driver.current_url.lower()
             
-            # Verify login was successful
-            if self.is_logged_in():
-                logger.info("Login successful!")
+            if "/feed/" in current_url:
+                logger.info("Login successful! Redirected to feed page.")
                 return True
+            
+            # If not redirected to /feed, manual verification might be needed
+            if manual_verification:
+                logger.warning("Login did not redirect to /feed. Manual verification may be required.")
+                logger.warning(f"Current URL: {self.driver.current_url}")
+                return self._wait_for_manual_verification()
             else:
-                if manual_verification:
-                    logger.warning("Login verification failed, attempting manual verification...")
-                    return self._wait_for_manual_verification()
-                else:
-                    logger.error("Login verification failed - may need manual verification")
-                    return False
+                logger.error("Login did not redirect to /feed. Manual verification may be required.")
+                logger.error(f"Current URL: {self.driver.current_url}")
+                logger.error("Set manual_verification=True to enable manual login.")
+                return False
         
         except TimeoutException:
             if manual_verification:
@@ -186,33 +140,9 @@ class LinkedInAuth:
                 return False
         except Exception as e:
             logger.error(f"Login failed: {str(e)}")
-            return False
-    
-    def _requires_manual_verification(self):
-        """
-        Check if the current page requires manual verification (CAPTCHA, 2FA, etc.).
-        
-        Returns:
-            bool: True if manual verification is required
-        """
-        try:
-            current_url = self.driver.current_url.lower()
-            page_source = self.driver.page_source.lower()
-            
-            # Check for common verification indicators
-            verification_indicators = [
-                "challenge" in current_url,
-                "captcha" in current_url,
-                "verify" in current_url,
-                "security" in current_url,
-                "captcha" in page_source,
-                "verify your identity" in page_source,
-                "unusual activity" in page_source,
-                "security challenge" in page_source
-            ]
-            
-            return any(verification_indicators)
-        except Exception:
+            if manual_verification:
+                logger.warning("Attempting manual verification...")
+                return self._wait_for_manual_verification()
             return False
     
     def _wait_for_manual_verification(self, timeout=300):
