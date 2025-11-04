@@ -185,61 +185,8 @@ class JobSearch:
                     cards = Array.from(uniqueCards);
                 }
                 
-                var jobsData = {};
+                return cards.map((c) => {return c.dataset.jobId})
                 
-                // Extract job ID from each card using multiple methods
-                for (var i = 0; i < cards.length; i++) {
-                    var card = cards[i];
-                    try {
-                        var jobId = null;
-                        var jobLink = null;
-                        
-                        // Method 1: Get job ID directly from data-job-id attribute
-                        jobId = card.getAttribute('data-job-id');
-                        
-                        // Method 2: If not found on card, try parent element
-                        if (!jobId) {
-                            var parent = card.closest('[data-job-id]');
-                            if (parent) {
-                                jobId = parent.getAttribute('data-job-id');
-                            }
-                        }
-                        
-                        // Method 3: Extract from link href if available
-                        if (!jobId) {
-                            var linkElement = card.querySelector('a[href*="/jobs/view/"]') ||
-                                            card.querySelector('.base-card__full-link');
-                            if (linkElement) {
-                                var href = linkElement.getAttribute('href');
-                                if (href) {
-                                    var match = href.match(/\\/jobs\\/view\\/(\\d+)\\/?/);
-                                    if (match && match[1]) {
-                                        jobId = match[1];
-                                        jobLink = href.startsWith('http') ? href : 'https://www.linkedin.com' + href;
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // If we found a job ID, construct the job link if not already set
-                        if (jobId) {
-                            if (!jobLink) {
-                                jobLink = 'https://www.linkedin.com/jobs/view/' + jobId + '/';
-                            }
-                            // Ensure full URL
-                            if (!jobLink.startsWith('http')) {
-                                jobLink = 'https://www.linkedin.com' + jobLink;
-                            }
-                            jobsData[jobId] = jobLink;
-                        }
-                    } catch (e) {
-                        // Skip this card if there's an error
-                        console.warn('Error extracting job card:', e);
-                        continue;
-                    }
-                }
-                
-                return jobsData;
             })();
             """
             
