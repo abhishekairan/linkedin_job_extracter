@@ -93,7 +93,7 @@ class JobSearch:
                     return cards.map((c) => {return c.dataset.jobId});
                 """)
                 if card_count:
-                    logger.info(f"Found {len(card_count)} job cards")
+                    logger.info(f"Found {len(card_count)} job cards: {card_count}")
                     jobs_found = True
                     break
             

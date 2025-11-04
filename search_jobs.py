@@ -140,7 +140,7 @@ def search_jobs_standalone(keywords, location=None, num_results=None):
         # This ensures extraction uses the same detection methods as search
         jobs_data = job_search.extract_jobs(jobs_ids)
         
-        logger.info(f"✓ Successfully extracted {len(jobs_data)} jobs")
+        logger.info(f"✓ Successfully extracted {len(jobs_data)} jobs: {jobs_data}")
         return jobs_data
     
     except Exception as e:
