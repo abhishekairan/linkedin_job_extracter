@@ -104,14 +104,14 @@ class JobSearch:
             self._scroll_to_load_more(num_results)
             
             logger.info("Job search completed successfully")
-            return True
+            return card_count
         
         except TimeoutException as e:
             logger.error(f"Timeout waiting for job cards: {str(e)}")
-            return False
+            return []
         except Exception as e:
             logger.error(f"Job search failed: {str(e)}")
-            return False
+            return []
     
     def extract_jobs(self, jobs_ids):
         """
