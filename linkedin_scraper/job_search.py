@@ -87,7 +87,7 @@ class JobSearch:
                     // Try multiple methods to find job cards
                     var cards = [];
                     
-                    // Method 1: data-view-name attribute
+                    // Method 1: data-job-id attribute
                     cards = Array.from(document.querySelectorAll('[data-job-id]'));
                     
                     return cards.map((c) => {return c.dataset.jobId});
@@ -163,51 +163,30 @@ class JobSearch:
                     // Try multiple methods to count job cards
                     var cards = [];
                     
-                    // Method 1: data-view-name attribute
-                    cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+                    // Method 1: data-job-id attribute
+                    cards = Array.from(document.querySelectorAll('[data-job-id]'));
                     
-                    // Method 2: base-card class
-                    if (cards.length === 0) {
-                        cards = Array.from(document.querySelectorAll('.base-card'));
-                    }
-                    
-                    // Method 3: jobs-list-item class
-                    if (cards.length === 0) {
-                        cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
-                    }
-                    
-                    // Method 4: Any element with job link
-                    if (cards.length === 0) {
-                        var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
-                        var uniqueCards = new Set();
-                        links.forEach(link => {
-                            var card = link.closest('li') || link.closest('.base-card') || link.parentElement;
-                            if (card) uniqueCards.add(card);
-                        });
-                        cards = Array.from(uniqueCards);
-                    }
-                    
-                    return cards.length;
+                    return cards.map((c) => {return c.dataset.jobId});
                 """)
                 
-                logger.info(f"Loaded {loaded_count} jobs")
+                logger.info(f"Loaded {len(loaded_count)} jobs: {loaded_count}")
                 
                 # Check if no new jobs were loaded
                 if loaded_count == previous_count:
                     no_change_count += 1
                     if no_change_count >= max_no_change:
-                        logger.info(f"No more jobs loading. Stopped at {loaded_count} jobs")
+                        logger.info(f"No more jobs loading. Stopped at {len(loaded_count)} jobs: {loaded_count}")
                         break
                 else:
                     no_change_count = 0  # Reset counter if new jobs were found
                 
                 previous_count = loaded_count
             
-            return True
+            return loaded_count
         
         except Exception as e:
             logger.warning(f"Error during scrolling: {str(e)}")
-            return False
+            return []
 
 
 
