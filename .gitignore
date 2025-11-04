@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Output files
+output/
+jobs_output.json
+
 # C extensions
 *.so
 
