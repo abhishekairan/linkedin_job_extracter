@@ -18,7 +18,6 @@ from pathlib import Path
 from linkedin_scraper.config import Config
 from linkedin_scraper.browser_manager import BrowserManager
 from linkedin_scraper.job_search import JobSearch
-from linkedin_scraper.job_extractor import JobExtractor
 from linkedin_scraper.linkedin_auth import LinkedInAuth
 from linkedin_scraper.security import SecurityManager
 
@@ -131,15 +130,15 @@ def search_jobs_standalone(keywords, location=None, num_results=None):
         
         logger.info("✓ Connected to browser service and ready for job search")
         
-        # Perform job search
+        # Perform job search and extract jobs
         job_search = JobSearch(driver)
         if not job_search.search_jobs(keywords, location, num_results or 0):
             logger.error("Job search failed")
             return {}
         
-        # Extract job data
-        job_extractor = JobExtractor(driver)
-        jobs_data = job_extractor.extract_jobs()
+        # Extract job data using the same JobSearch instance
+        # This ensures extraction uses the same detection methods as search
+        jobs_data = job_search.extract_jobs()
         
         logger.info(f"✓ Successfully extracted {len(jobs_data)} jobs")
         return jobs_data

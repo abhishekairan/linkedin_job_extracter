@@ -20,6 +20,13 @@ All notable changes to this project will be documented in this file.
   - Simplified login check logic to only check for `/feed` redirect (removed unnecessary manual verification triggers)
 
 ### Changed
+- **Consolidated job extraction into JobSearch module**
+  - Removed `job_extractor.py` module (deleted)
+  - Added `extract_jobs()` method to `JobSearch` class
+  - Extraction now uses the **exact same multi-method detection** as job search for consistency
+  - This fixes the issue where `job_search.py` could find jobs but `job_extractor.py` failed to extract them
+  - Updated `search_jobs.py` and `main.py` to use `JobSearch.extract_jobs()` instead of `JobExtractor`
+  - Removed `JobExtractor` from `linkedin_scraper/__init__.py` exports
 - Simplified `LinkedInAuth.is_logged_in()` to use simple URL-based check (redirect to `/feed` = logged in)
 - Simplified `LinkedInAuth.login()` to only trigger manual verification if login doesn't redirect to `/feed`
 - Removed `_requires_manual_verification()` method (no longer needed)

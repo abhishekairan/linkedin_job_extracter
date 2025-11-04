@@ -16,7 +16,6 @@ from linkedin_scraper.config import Config
 from linkedin_scraper.browser_manager import BrowserManager
 from linkedin_scraper.linkedin_auth import LinkedInAuth
 from linkedin_scraper.job_search import JobSearch
-from linkedin_scraper.job_extractor import JobExtractor
 
 # Setup logging
 log_dir = Path(__file__).parent / 'logs'
@@ -74,15 +73,15 @@ def scrape_linkedin_jobs(keywords, num_results, location=None ):
         else:
             logger.info("Already authenticated")
         
-        # Search for jobs
+        # Search for jobs and extract them
         job_search = JobSearch(driver)
         if not job_search.search_jobs(keywords, location, num_results):
             logger.error("Job search failed. Exiting.")
             return {}
         
-        # Extract job data
-        job_extractor = JobExtractor(driver)
-        jobs_data = job_extractor.extract_jobs()
+        # Extract job data using the same JobSearch instance
+        # This ensures extraction uses the same detection methods as search
+        jobs_data = job_search.extract_jobs()
         
         logger.info(f"Successfully extracted {len(jobs_data)} jobs")
         return jobs_data

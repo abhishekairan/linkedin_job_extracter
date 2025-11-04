@@ -136,6 +136,126 @@ class JobSearch:
             logger.error(f"Job search failed: {str(e)}")
             return False
     
+    def extract_jobs(self):
+        """
+        Extract job IDs and links using JavaScript injection.
+        Uses the same multi-method detection as search_jobs() for consistency.
+        This method bypasses LinkedIn's HTML protection by using JavaScript injection.
+        
+        Returns:
+            dict: Dictionary mapping job_id to job_link
+                  Format: {job_id: job_link}
+        """
+        try:
+            logger.info("Extracting job data using JavaScript injection...")
+            
+            # Use the same multi-method detection as search_jobs() to ensure consistency
+            # This is critical: we use the exact same methods that successfully found the cards
+            js_script = """
+            (function() {
+                // Use the SAME multi-method approach as search_jobs() for consistency
+                var cards = [];
+                
+                // Method 1: data-view-name attribute (primary method)
+                cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+                
+                // Method 2: base-card class (fallback)
+                if (cards.length === 0) {
+                    cards = Array.from(document.querySelectorAll('.base-card'));
+                }
+                
+                // Method 3: jobs-list-item class (fallback)
+                if (cards.length === 0) {
+                    cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
+                }
+                
+                // Method 4: Any element with job link (ultimate fallback)
+                if (cards.length === 0) {
+                    var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
+                    var uniqueCards = new Set();
+                    links.forEach(function(link) {
+                        var card = link.closest('li') || 
+                                   link.closest('.base-card') || 
+                                   link.closest('.jobs-search-results__list-item') ||
+                                   link.parentElement;
+                        if (card) {
+                            uniqueCards.add(card);
+                        }
+                    });
+                    cards = Array.from(uniqueCards);
+                }
+                
+                var jobsData = {};
+                
+                // Extract job ID from each card using multiple methods
+                for (var i = 0; i < cards.length; i++) {
+                    var card = cards[i];
+                    try {
+                        var jobId = null;
+                        var jobLink = null;
+                        
+                        // Method 1: Get job ID directly from data-job-id attribute
+                        jobId = card.getAttribute('data-job-id');
+                        
+                        // Method 2: If not found on card, try parent element
+                        if (!jobId) {
+                            var parent = card.closest('[data-job-id]');
+                            if (parent) {
+                                jobId = parent.getAttribute('data-job-id');
+                            }
+                        }
+                        
+                        // Method 3: Extract from link href if available
+                        if (!jobId) {
+                            var linkElement = card.querySelector('a[href*="/jobs/view/"]') ||
+                                            card.querySelector('.base-card__full-link');
+                            if (linkElement) {
+                                var href = linkElement.getAttribute('href');
+                                if (href) {
+                                    var match = href.match(/\\/jobs\\/view\\/(\\d+)\\/?/);
+                                    if (match && match[1]) {
+                                        jobId = match[1];
+                                        jobLink = href.startsWith('http') ? href : 'https://www.linkedin.com' + href;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // If we found a job ID, construct the job link if not already set
+                        if (jobId) {
+                            if (!jobLink) {
+                                jobLink = 'https://www.linkedin.com/jobs/view/' + jobId + '/';
+                            }
+                            // Ensure full URL
+                            if (!jobLink.startsWith('http')) {
+                                jobLink = 'https://www.linkedin.com' + jobLink;
+                            }
+                            jobsData[jobId] = jobLink;
+                        }
+                    } catch (e) {
+                        // Skip this card if there's an error
+                        console.warn('Error extracting job card:', e);
+                        continue;
+                    }
+                }
+                
+                return jobsData;
+            })();
+            """
+            
+            # Execute JavaScript and get results
+            jobs_data = self.driver.execute_script(js_script)
+            
+            if not jobs_data:
+                jobs_data = {}
+            
+            logger.info(f"Extracted {len(jobs_data)} jobs using the same detection methods as search")
+            return jobs_data
+        
+        except Exception as e:
+            logger.error(f"Job extraction failed: {str(e)}")
+            return {}
+    
     def _scroll_to_load_more(self, target_count):
         """
         Scroll page to load more job results dynamically.
