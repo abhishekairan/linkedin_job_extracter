@@ -2,17 +2,16 @@
 Job description extractor with stealth mode support.
 Extracts job description and job ID from LinkedIn job pages.
 Handles job not found errors gracefully.
+Uses BrowserManager to reuse existing browser instance configured via .env
 """
 import logging
 import time
 import re
 from pathlib import Path
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from linkedin_scraper.config import Config
+from linkedin_scraper.browser_manager import BrowserManager
 from linkedin_scraper.security import SecurityManager
 
 # Setup logging
@@ -26,81 +25,59 @@ logger = logging.getLogger(__name__)
 class JobExtractor:
     """Extracts job descriptions and job IDs from LinkedIn job pages."""
     
-    def __init__(self, driver=None):
+    def __init__(self, driver=None, try_remote_connection=True):
         """
         Initialize JobExtractor with WebDriver instance.
         
         Args:
-            driver: Optional Selenium WebDriver instance. If None, creates new stealth browser.
+            driver: Optional Selenium WebDriver instance. If None, uses BrowserManager to get/create browser.
+            try_remote_connection (bool): If True, tries to connect to existing browser service (default: True)
         """
         self.driver = driver
-        self.browser_created = driver is None
+        self.try_remote_connection = try_remote_connection
+        self.browser_manager = None
+        # browser_created is False if using BrowserManager (shared instance)
+        # True only if we manually create and manage a browser (not used anymore)
+        self.browser_created = False
     
-    def _create_stealth_browser(self):
+    def _get_browser_instance(self):
         """
-        Create a Chrome browser instance with stealth options.
+        Get browser instance using BrowserManager (respects .env configuration).
+        Tries to connect to existing browser service, or creates new one if needed.
         
         Returns:
-            webdriver.Chrome: Configured Chrome WebDriver instance
+            webdriver.Chrome: Configured Chrome WebDriver instance from BrowserManager
         """
         try:
-            logger.info("Creating stealth browser instance...")
+            logger.info("Getting browser instance from BrowserManager...")
             
-            # Load configuration
+            # Validate configuration
             Config.validate()
             
-            # Create Chrome options with stealth settings
-            options = Options()
+            # Create browser manager instance
+            self.browser_manager = BrowserManager()
             
-            # Set binary location if configured
-            if Config.CHROME_BINARY_PATH:
-                options.binary_location = Config.CHROME_BINARY_PATH
+            # Get or create browser instance
+            # This will use existing browser from browser_service if available,
+            # or create new one with .env configuration (stealth mode, paths, etc.)
+            driver = self.browser_manager.get_or_create_browser(
+                try_remote_connection=self.try_remote_connection
+            )
             
-            # Required arguments for stability
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-gpu-sandbox')
-            options.add_argument('--disable-setuid-sandbox')
+            # Verify browser is accessible
+            if not self.browser_manager.is_browser_alive():
+                logger.error("Browser instance is not accessible")
+                raise RuntimeError("Browser instance is not accessible")
             
-            # Stealth and anti-detection options
-            options.add_argument('--disable-blink-features=AutomationControlled')
-            options.add_argument('--start-maximized')
-            options.add_argument('--disable-default-apps')
-            options.add_argument('--disable-extensions')
-            options.add_argument('--disable-sync')
-            options.add_argument('--disable-translate')
-            options.add_argument('--no-first-run')
-            options.add_argument('--password-store=basic')
+            logger.info("✓ Browser instance obtained from BrowserManager")
+            logger.info(f"Using Chrome binary: {Config.CHROME_BINARY_PATH or 'System default'}")
+            logger.info(f"Using ChromeDriver: {Config.CHROMEDRIVER_PATH}")
+            logger.info(f"Headless mode: {Config.HEADLESS_MODE}")
             
-            # Set random realistic user agent
-            user_agent = SecurityManager.get_random_user_agent()
-            options.add_argument(f'user-agent={user_agent}')
-            
-            # Headless mode if configured
-            if Config.HEADLESS_MODE:
-                options.add_argument('--headless')
-                options.add_argument('--headless=new')
-                options.add_argument('--disable-gpu')
-            
-            # Create service
-            service = Service(Config.CHROMEDRIVER_PATH)
-            
-            # Create WebDriver
-            driver = webdriver.Chrome(service=service, options=options)
-            driver.implicitly_wait(Config.IMPLICIT_WAIT)
-            
-            # Inject stealth scripts
-            try:
-                SecurityManager.inject_stealth_scripts(driver)
-                logger.info("✓ Stealth scripts injected successfully")
-            except Exception as e:
-                logger.warning(f"Failed to inject some stealth scripts: {str(e)}")
-            
-            logger.info("✓ Stealth browser created successfully")
             return driver
             
         except Exception as e:
-            logger.error(f"Failed to create stealth browser: {str(e)}")
+            logger.error(f"Failed to get browser instance: {str(e)}")
             raise
     
     def _extract_job_id(self, url=None):
@@ -259,9 +236,10 @@ class JobExtractor:
         }
         
         try:
-            # Create browser if not provided
+            # Get browser instance if not provided
+            # Uses BrowserManager which respects .env configuration
             if not self.driver:
-                self.driver = self._create_stealth_browser()
+                self.driver = self._get_browser_instance()
             
             logger.info(f"Extracting job details from: {url}")
             
@@ -381,13 +359,21 @@ class JobExtractor:
             return False
     
     def close(self):
-        """Close browser instance if it was created by this extractor."""
-        if self.browser_created and self.driver:
-            try:
-                self.driver.quit()
-                logger.info("Browser closed")
-            except Exception as e:
-                logger.warning(f"Error closing browser: {str(e)}")
+        """
+        Close browser instance if it was provided externally.
+        Note: If browser was obtained from BrowserManager (shared instance),
+        it will NOT be closed to maintain persistence for other services.
+        """
+        # Only close if driver was provided externally (not from BrowserManager)
+        # BrowserManager maintains shared instances, so we don't close those
+        if self.driver and not self.browser_manager:
+            # Driver was provided externally, but we shouldn't close it
+            # as it might be managed by another component
+            logger.debug("Driver was provided externally - not closing (may be managed elsewhere)")
+        elif self.browser_manager:
+            # Browser is managed by BrowserManager - don't close it
+            logger.debug("Browser is managed by BrowserManager - not closing (maintains persistence)")
+        # If no driver, nothing to close
     
     def __enter__(self):
         """Context manager entry."""

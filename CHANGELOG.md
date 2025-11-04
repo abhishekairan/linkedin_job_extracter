@@ -85,9 +85,13 @@ This version represents a major architectural improvement with on-demand authent
 
 - **Job Extractor Module**
   - Completely rewritten `job_extractor.py`
-  - Now uses project's `Config` and `SecurityManager` for consistency
-  - Integrated with existing stealth infrastructure
-  - Can accept existing WebDriver instance or create new one
+  - Now uses `BrowserManager` to get browser instance (respects `.env` configuration)
+  - Uses project's `Config` and `SecurityManager` for consistency
+  - Integrated with existing stealth infrastructure and browser management system
+  - Reuses browser from `browser_service.py` if available (via remote debugging)
+  - Creates new browser with `.env` configuration if needed (Chrome paths, headless mode, etc.)
+  - Can accept existing WebDriver instance or get from BrowserManager
+  - Browser persistence maintained (doesn't close shared browser instances)
   - Context manager support (`with JobExtractor() as extractor:`)
   - Command-line interface for standalone usage
 
