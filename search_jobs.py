@@ -120,7 +120,7 @@ def search_jobs_standalone(keywords, location=None, num_results=None):
         # Using optimized direct URL navigation - login handled automatically by job_search if required
         # This minimizes login attempts by only logging in when LinkedIn requires it
         job_search = JobSearch(driver)
-        jobs_ids = job_search.search_jobs(keywords, location, num_results or 0,time_filter='1hour')
+        jobs_ids = job_search.search_jobs(keywords, location, num_results or 0,time_filter='3hours')
         if not jobs_ids:
             logger.error("Job search failed - no jobs found")
             return {}
