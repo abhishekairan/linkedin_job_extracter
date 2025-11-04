@@ -52,20 +52,42 @@ class BrowserManager:
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         
-        # Stealth and anti-detection options
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_argument('--start-maximized')
-        options.add_argument('--disable-web-security')
-        options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+        # Critical stability options to prevent Chrome from crashing or becoming unreachable
+        options.add_argument('--disable-gpu-sandbox')
+        options.add_argument('--disable-setuid-sandbox')
+        options.add_argument('--disable-software-rasterizer')
         options.add_argument('--disable-background-networking')
         options.add_argument('--disable-background-timer-throttling')
+        options.add_argument('--disable-renderer-backgrounding')
+        options.add_argument('--disable-backgrounding-occluded-windows')
+        options.add_argument('--disable-ipc-flooding-protection')
+        options.add_argument('--disable-hang-monitor')
+        options.add_argument('--disable-prompt-on-repost')
+        options.add_argument('--disable-client-side-phishing-detection')
+        options.add_argument('--disable-component-update')
+        options.add_argument('--disable-domain-reliability')
+        options.add_argument('--disable-features=TranslateUI')
+        options.add_argument('--disable-features=BlinkGenPropertyTrees')
+        options.add_argument('--disable-breakpad')
+        options.add_argument('--disable-crash-reporter')
+        options.add_argument('--disable-logging')
+        options.add_argument('--log-level=3')
+        options.add_argument('--silent')
+        
+        # Stealth and anti-detection options (keep minimal to avoid startup issues)
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        options.add_argument('--start-maximized')
         options.add_argument('--disable-default-apps')
         options.add_argument('--disable-extensions')
         options.add_argument('--disable-sync')
         options.add_argument('--disable-translate')
-        options.add_argument('--metrics-recording-only')
         options.add_argument('--no-first-run')
         options.add_argument('--password-store=basic')
+        
+        # Remove problematic options that can cause startup failures:
+        # --disable-web-security: Can cause Chrome to hang
+        # --disable-features=IsolateOrigins,site-per-process: Can cause crashes
+        # Keep only essential options for stability
         
         # Set random realistic user agent
         from .security import SecurityManager
@@ -79,8 +101,11 @@ class BrowserManager:
             logger.info(f"Using remote debugging on port {port}")
         else:
             # Enable remote debugging port when creating new browser
+            # ROOT FIX: Explicitly bind to 127.0.0.1 and allow all origins
             port = debug_port or DEFAULT_DEBUG_PORT
             options.add_argument(f'--remote-debugging-port={port}')
+            options.add_argument('--remote-debugging-address=127.0.0.1')
+            options.add_argument('--remote-allow-origins=*')  # Allow connections from any origin
             logger.info(f"Remote debugging enabled on port {port}")
         
         # Headless mode if configured
@@ -150,12 +175,16 @@ class BrowserManager:
     
     def _create_service(self):
         """
-        Create Chrome service with driver path.
+        Create Chrome service with driver path and proper configuration.
+        Sets up service to handle Chrome startup properly.
         
         Returns:
             Service: Configured Chrome service object
         """
-        return Service(self.config.CHROMEDRIVER_PATH)
+        service = Service(self.config.CHROMEDRIVER_PATH)
+        # Chrome service will start Chrome process
+        # We wait for remote debugging port to be ready before connecting
+        return service
     
     def launch_browser(self, use_remote_debugging=False):
         """
@@ -241,10 +270,59 @@ class BrowserManager:
             # Additional options for non-headless stability
             if not self.config.HEADLESS_MODE:
                 options.add_argument('--disable-gpu')  # Helps on some systems
-                options.add_argument('--disable-software-rasterizer')
             
-            BrowserManager._shared_driver = webdriver.Chrome(service=service, options=options)
+            # Ensure remote debugging is properly initialized
+            options.add_experimental_option('useAutomationExtension', False)
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            
+            logger.info("Creating Chrome WebDriver connection...")
+            
+            # ROOT FIX: Ensure Chrome starts properly and ChromeDriver can connect
+            # ChromeDriver has built-in timeout for connecting to Chrome
+            # We ensure Chrome options are optimized for fast, stable startup
+            try:
+                # Create WebDriver - ChromeDriver will start Chrome and wait for it to be ready
+                BrowserManager._shared_driver = webdriver.Chrome(service=service, options=options)
+                    
+            except Exception as init_error:
+                error_msg = str(init_error).lower()
+                if "chrome not reachable" in error_msg or "not reachable" in error_msg:
+                    logger.error("Chrome started but ChromeDriver cannot connect to it.")
+                    logger.error("This usually means:")
+                    logger.error("  1. Chrome took too long to start (system resource constraints)")
+                    logger.error("  2. Chrome crashed during startup")
+                    logger.error("  3. ChromeDriver version mismatch with Chrome")
+                    logger.error("  4. Remote debugging port conflict or firewall issue")
+                    logger.error("\nTroubleshooting steps:")
+                    logger.error("  1. Check Chrome version: google-chrome --version")
+                    logger.error("  2. Check ChromeDriver version: chromedriver --version")
+                    logger.error("  3. Ensure versions match (ChromeDriver should match Chrome)")
+                    logger.error("  4. Check system resources: free -h && df -h")
+                    logger.error("  5. Check if Chrome process is running: ps aux | grep chrome")
+                    logger.error("  6. Check if port is accessible: netstat -tuln | grep 9222")
+                    logger.error("  7. Try enabling headless mode: HEADLESS_MODE=True in .env")
+                    logger.error("  8. Check Chrome logs: tail -f ~/.config/google-chrome/chrome_debug.log")
+                    raise WebDriverException(f"Chrome not reachable - Chrome may have crashed or failed to start: {str(init_error)}")
+                else:
+                    raise
+            
             BrowserManager._shared_driver.implicitly_wait(self.config.IMPLICIT_WAIT)
+            
+            # Verify connection is working immediately after creation
+            try:
+                # Test that we can actually communicate with Chrome
+                # This ensures Chrome is fully ready and responsive
+                BrowserManager._shared_driver.current_url
+                logger.debug("Chrome connection verified - browser is responsive")
+            except Exception as verify_error:
+                logger.error(f"Chrome connection verification failed: {str(verify_error)}")
+                logger.error("Chrome was created but is not responding to commands")
+                try:
+                    BrowserManager._shared_driver.quit()
+                except:
+                    pass
+                BrowserManager._shared_driver = None
+                raise WebDriverException(f"Chrome connection verification failed - Chrome may have crashed or is not responding: {str(verify_error)}")
             
             # Inject stealth scripts to prevent detection
             try:

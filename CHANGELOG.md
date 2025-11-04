@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2025-11-04
+
+### Fixed
+- **ROOT FIX: Browser session creation failure ("chrome not reachable")**
+  - Removed problematic Chrome options that caused Chrome to hang or crash during startup:
+    - Removed `--disable-web-security` (can cause Chrome to hang)
+    - Removed `--disable-features=IsolateOrigins,site-per-process` (can cause crashes)
+  - Added critical stability options to prevent Chrome from becoming unreachable:
+    - Added `--disable-gpu-sandbox`, `--disable-setuid-sandbox` for better stability
+    - Added `--disable-hang-monitor`, `--disable-crash-reporter` to prevent startup issues
+    - Added `--remote-allow-origins=*` to ensure remote debugging accepts connections
+  - Improved remote debugging configuration:
+    - Explicitly bind to `127.0.0.1` to ensure Chrome listens on correct interface
+    - Added proper connection verification after browser creation
+  - Enhanced error messages with detailed troubleshooting steps for "chrome not reachable" errors
+  - Simplified login check logic to only check for `/feed` redirect (removed unnecessary manual verification triggers)
+
+### Changed
+- Simplified `LinkedInAuth.is_logged_in()` to use simple URL-based check (redirect to `/feed` = logged in)
+- Simplified `LinkedInAuth.login()` to only trigger manual verification if login doesn't redirect to `/feed`
+- Removed `_requires_manual_verification()` method (no longer needed)
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
