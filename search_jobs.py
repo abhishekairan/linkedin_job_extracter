@@ -193,6 +193,7 @@ Examples:
         logger.warning("No jobs found or search failed")
         print("No jobs found or search failed")
         sys.exit(1)
+    return results
 
 
 if __name__ == "__main__":
