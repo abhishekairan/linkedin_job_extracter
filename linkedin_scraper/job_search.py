@@ -27,7 +27,13 @@ class JobSearch:
     TIME_FILTERS = {
         'any': None,  # No filter
         '1hour': 'r3600',  # Last 1 hour
-        '24hours': 'r86400',  # Last 24 hours
+        '2hours': 'r7200',  # Last 2 hours
+        '3hours': 'r10800',  # Last 3 hours
+        '4hours': 'r14400',  # Last 4 hours
+        '6hours': 'r21600',  # Last 6 hours
+        '8hours': 'r28800',  # Last 8 hours
+        '12hours': 'r43200',  # Last 12 hours
+        '1day': 'r86400',  # Last 1 day
         'week': 'r604800',  # Last week
         'month': 'r2592000',  # Last month
     }
