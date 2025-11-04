@@ -2,316 +2,194 @@
 
 All notable changes to this project will be documented in this file.
 
-## [4.2.1] - 2025-11-04
-
-### Changed
-- **Minimized Login Process - On-Demand Authentication**
-  - **Removed pre-authentication from browser_service.py**: Browser service no longer performs login during initialization
-    - Browser service now only maintains browser instance
-    - Login is handled automatically by job_search when LinkedIn requires it
-    - Eliminates unnecessary login attempts when guest access works
-  - **Removed pre-authentication from search_jobs.py**: Login check moved to after job search attempt
-    - Job search now attempts search first, then handles login only if required
-    - Login detection happens within job_search.search_jobs() method
-    - More efficient: only one login check per search operation
-- **Optimized Job Search with Direct URL Navigation**
-  - **Step 1: Direct URL Search**: Now builds and navigates directly to LinkedIn job search URL with query parameters
-    - Supports advanced filters: keywords, location, time filter (1 hour, 24 hours, week, month), geo ID, distance
-    - More control over search parameters without UI interaction
-  - **Step 2: Smart Login Detection**: Checks if login is required by examining URL redirects and page content
-    - Detects redirects to `/uas/login` page
-    - Checks for login elements and "Sign in" prompts
-    - Verifies if job cards are visible (guest access might work)
-    - Only triggers login when actually required
-  - **Step 3: Conditional Login**: Only performs login if LinkedIn requires it
-    - Avoids unnecessary login attempts when guest access works
-    - Maintains existing login session if already authenticated
-    - Navigates back to search URL after successful login
-  - **Step 4: Enhanced Job Extraction**: Improved scrolling and job ID collection
-    - Tracks unique job IDs across scrolls
-    - Removes duplicates while preserving order
-    - Better logging of job discovery progress
-- **Simplified Javascript Injection**
-  - Changed job searching dataset to job IDs
-  - Removed separate javascript injection for finding and extracting jobs 
-  - Merged job extraction part into finding job which now returns list of job IDs instead of boolean
-- **Return type changed from boolean to list**
-  - Changed the return type of `search_jobs()` to list of job IDs
-  - `extract_jobs()` converts job IDs to dict of {"job_id": "job_link"}
-- **Improved logging and error handling**
-  - Added detailed logging for each step of the search process
-  - Better error messages and scenario handling
-  - Comprehensive comments explaining the optimization strategy
-
-
-## [4.2.0] - 2025-11-04
-
-### Fixed
-- **ROOT FIX: Browser session creation failure ("chrome not reachable")**
-  - Removed problematic Chrome options that caused Chrome to hang or crash during startup:
-    - Removed `--disable-web-security` (can cause Chrome to hang)
-    - Removed `--disable-features=IsolateOrigins,site-per-process` (can cause crashes)
-  - Added critical stability options to prevent Chrome from becoming unreachable:
-    - Added `--disable-gpu-sandbox`, `--disable-setuid-sandbox` for better stability
-    - Added `--disable-hang-monitor`, `--disable-crash-reporter` to prevent startup issues
-    - Added `--remote-allow-origins=*` to ensure remote debugging accepts connections
-  - Improved remote debugging configuration:
-    - Explicitly bind to `127.0.0.1` to ensure Chrome listens on correct interface
-    - Added proper connection verification after browser creation
-  - Enhanced error messages with detailed troubleshooting steps for "chrome not reachable" errors
-  - Simplified login check logic to only check for `/feed` redirect (removed unnecessary manual verification triggers)
-
-### Changed
-- **Consolidated job extraction into JobSearch module**
-  - Removed `job_extractor.py` module (deleted)
-  - Added `extract_jobs()` method to `JobSearch` class
-  - Extraction now uses the **exact same multi-method detection** as job search for consistency
-  - This fixes the issue where `job_search.py` could find jobs but `job_extractor.py` failed to extract them
-  - Updated `search_jobs.py` and `main.py` to use `JobSearch.extract_jobs()` instead of `JobExtractor`
-  - Removed `JobExtractor` from `linkedin_scraper/__init__.py` exports
-- Simplified `LinkedInAuth.is_logged_in()` to use simple URL-based check (redirect to `/feed` = logged in)
-- Simplified `LinkedInAuth.login()` to only trigger manual verification if login doesn't redirect to `/feed`
-- Removed `_requires_manual_verification()` method (no longer needed)
-
-## [4.1.4] - 2025-11-03
-
-### Fixed
-
-- **Job Extraction Failure**: Fixed issue where job extraction found 0 jobs even though job search successfully found cards
-  - Updated `job_extractor.py` to use the exact same multi-method card detection as `job_search.py`
-  - Now uses all 4 fallback methods: data-view-name, base-card class, jobs-list-item, and job links
-  - Improved job ID and link extraction with multiple fallback methods
-  - Ensures extraction JavaScript matches the successful search detection technique
-
-### Changed
-
-- **Job Extraction Logic**: Completely rewritten to match job search detection methods
-- **Card Detection**: Uses identical fallback sequence as job_search.py for consistency
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [4.1.3] - 2025-11-03
+## Version 5 (v5) - Current Version
 
-### Fixed
-
-- **False Manual Login Trigger**: Fixed issue where manual login was triggered even when user was already logged in
-  - Improved `is_logged_in()` to use URL-based detection (LinkedIn feed is only accessible when logged in)
-  - Added JavaScript-based login verification to avoid unnecessary navigation
-  - Now properly detects logged-in state without triggering verification prompts
-
-- **Job Cards Detection**: Fixed timeout waiting for job cards by using JavaScript injection instead of Selenium selectors
-  - LinkedIn blocks Selenium selectors, so now uses client-side JavaScript to detect job cards
-  - Multiple fallback methods: data-view-name, base-card class, jobs-list-item, and job links
-  - Bypasses LinkedIn's blocking mechanism by executing JavaScript directly in browser
-
-- **Browser Service Connection**: Improved connection logic to better handle suspended services
-  - Better detection of Chrome processes on debug port
-  - Clearer warnings when service is suspended vs crashed
-  - More informative messages guiding users to resume service
-
-### Changed
-
-- **Login Detection**: Now primarily uses URL-based detection (can access /feed/ = logged in)
-- **Job Card Detection**: Completely rewritten to use JavaScript injection with multiple fallback methods
-- **Scrolling Logic**: Updated to use JavaScript for counting job cards instead of Selenium find_elements
-
-### Technical Details
-
-- Login check: Verifies URL first, then uses JavaScript to confirm login status
-- Job cards: JavaScript injection with 4 different detection methods as fallbacks
-- Browser connection: Enhanced process detection to distinguish suspended vs crashed services
+**Previous versions (4.x.x and below) were part of Version 4 (v4)**
 
 ---
 
-## [4.1.2] - 2025-11-03
+## [5.0.0] - 2025-11-04
 
-### Fixed
+### Major Version Update: v5
 
-- **Port Conflict Resolution**: When port 9222 is in use by stale Chrome processes, automatically finds and uses alternative port (9223-9239) instead of failing
-- **Renderer Connection Error**: Fixed "unable to connect to renderer" error that was caused by port conflicts preventing Chrome from starting
-- **Stale Chrome Process Handling**: Better handling when port is occupied by orphaned Chrome processes from suspended browser service
-
-### Changed
-
-- **Dynamic Port Assignment**: Browser manager now automatically finds available port when default port (9222) is occupied
-- **Port Availability Logic**: Improved port checking with proper availability detection (port is available if connection fails)
-- **Error Recovery**: When unable to connect to existing browser, creates new instance on alternative port instead of failing
-
-### Technical Details
-
-- Port availability check: Port is considered available if socket connection fails (port not in use)
-- Port range: Tries ports 9223-9239 when 9222 is unavailable
-- Debug port saved to file for future connections
-- Better error messages guide users to resolve port conflicts
-
----
-
-## [4.1.1] - 2025-11-03
-
-### Fixed
-
-- **Chrome DevTools Protocol Verification**: Enhanced remote connection check to verify Chrome DevTools Protocol is actually responding, not just that port is open
-- **Port Conflict Detection**: Added detection of port conflicts before attempting to create new browser instances
-- **Xvfb Verification**: Added verification that Xvfb is actually running and accessible before using display :99
-- **Suspended Service Detection**: Better handling when browser service is suspended (Ctrl+Z) but Chrome is still running
-
-### Added
-
-- **DevTools Protocol Check**: Verifies Chrome DevTools Protocol responds before attempting remote connection
-- **Process Detection**: Checks which process is using port 9222 when conflicts occur
-- **Display Accessibility Check**: Verifies display is accessible using xdpyinfo before launching Chrome
-- **Xvfb Startup Verification**: Confirms Xvfb actually started before proceeding
-
-### Improved
-
-- **Better Error Messages**: More specific messages about suspended services and port conflicts
-- **Xvfb Startup Reliability**: Increased wait time and added verification step
-- **Port Conflict Warnings**: Clear warnings when port is in use and guidance on resolution
-
----
-
-## [4.1.0] - 2025-11-03
-
-### Fixed
-
-- **Remote Debugging Connection**: Fixed issue where `search_jobs.py` couldn't connect to browser service's Chrome instance
-  - Added port accessibility check before attempting remote connection
-  - Improved error handling for connection failures
-  - Better detection of when browser service Chrome is not accessible
-
-- **Chrome Renderer Connection Error**: Fixed "unable to connect to renderer" error when creating new browser instances
-  - Automatic Xvfb setup when DISPLAY not set in non-headless mode
-  - Better Chrome options for non-headless stability
-  - Improved error messages with troubleshooting steps
-
-- **Non-Headless Mode Setup**: Enhanced automatic display server setup
-  - Automatically starts Xvfb on display :99 if DISPLAY not set
-  - Checks for existing Xvfb processes before starting new one
-  - Provides clear error messages if Xvfb not available
-
-### Added
-
-- **Socket Port Check**: Added connection test before attempting remote debugging connection
-  - Tests if Chrome debug port (9222) is accessible before connecting
-  - Prevents timeout errors and provides faster failure detection
-
-- **Automatic Display Setup**: Browser manager now automatically sets up Xvfb for non-headless mode
-  - Detects missing DISPLAY environment variable
-  - Automatically starts Xvfb if not running
-  - Sets DISPLAY environment variable automatically
-
-- **Enhanced Error Messages**: More detailed error messages for common Chrome launch failures
-  - Specific messages for renderer connection errors
-  - Specific messages for session creation failures
-  - Troubleshooting steps included in error output
-
-- **Better Logging**: Added more informative log messages during browser launch
-  - Logs ChromeDriver path, Chrome binary path
-  - Logs headless mode status and DISPLAY variable
-  - Helps with debugging configuration issues
-
-### Changed
-
-- **Remote Connection Logic**: Improved remote debugging connection attempt
-  - Now checks port accessibility before attempting connection
-  - Better error handling and user feedback
-  - Falls back to creating new browser more gracefully
-
-- **Chrome Options**: Enhanced Chrome options for non-headless mode
-  - Added `--disable-gpu` for non-headless mode stability
-  - Added `--disable-software-rasterizer` for better compatibility
-  - Better handling of headless vs non-headless modes
-
-### Technical Details
-
-- Socket connection test added before remote debugging connection
-- Xvfb auto-setup checks for existing processes to avoid duplicates
-- Display environment variable set automatically when Xvfb starts
-- Enhanced error messages include platform-specific solutions
-
----
-
-## [4.0.0] - 2024-01-15
-
-### Major Reorganization
-
-Complete project reorganization into standalone service architecture with enhanced security and scalability.
+This version represents a major architectural improvement with on-demand authentication, optimized direct URL navigation, and enhanced job extraction capabilities.
 
 ### Added
 
 #### Core Features
-- **Standalone Browser Service** (`browser_service.py`): Maintains persistent browser and LinkedIn authentication
-- **Standalone Job Search Service** (`search_jobs.py`): Performs job searches and extracts job data
-- **Security Module** (`linkedin_scraper/security.py`): Anti-detection measures and rate limiting
-- **Enhanced Job Extraction**: Uses `data-job-id` attribute directly for more reliable extraction
+- **On-Demand Authentication System**
+  - Browser service maintains browser instance without pre-authentication
+  - Login handled automatically by job_search when LinkedIn requires it
+  - Eliminates unnecessary login attempts when guest access works
+  - Faster service startup without waiting for authentication
+
+- **Direct URL Navigation for Job Search**
+  - Builds and navigates directly to LinkedIn job search URL with query parameters
+  - Supports advanced filters: keywords, location, time filter (1 hour, 24 hours, week, month), geo ID, distance
+  - More control over search parameters without UI interaction
+  - No need to interact with search bar or UI elements
+
+- **Smart Login Detection**
+  - Checks if login is required by examining URL redirects and page content
+  - Detects redirects to `/uas/login` page
+  - Checks for login elements and "Sign in" prompts
+  - Verifies if job cards are visible (guest access might work)
+  - Only triggers login when actually required
+
+- **Enhanced Job Extractor with Stealth Mode**
+  - `job_extractor.py` runs in full stealth mode
+  - Uses `SecurityManager` for stealth scripts injection
+  - Random user agent rotation
+  - Anti-detection Chrome options
+  - Job ID extraction with multiple fallback methods
+  - Comprehensive job not found error handling
 
 #### Security Features
-- Browser fingerprint masking and stealth scripts
-- Rate limiting between searches (30-120 seconds)
-- Human-like behavior patterns (random delays, scroll patterns)
-- Random user agent rotation
-- Automation detection bypass via CDP commands
-
-#### Documentation
-- **PROJECT.md**: Comprehensive project overview and architecture
-- **BROWSER_SERVICE.md**: Detailed browser service documentation
-- **JOB_SEARCH_SERVICE.md**: Job search service documentation
-- **REMOTE_ACCESS.md**: Remote access setup guide (RealVNC, etc.)
-
-#### JavaScript Extraction Improvements
-- Primary method: Extract from `data-job-id` attribute
-- Fallback methods: Parent element lookup, URL pattern extraction
-- Better error handling and logging
+- **Stealth Scripts**: Masks automation indicators using CDP commands
+- **Random User Agents**: Rotates user agent strings for each browser instance
+- **Rate Limiting**: Prevents aggressive scraping (30-120 seconds between searches)
+- **Human-like Behavior**: Random delays, scroll patterns, mouse movements
+- **Browser Fingerprint Masking**: Removes automation properties
 
 ### Changed
 
 #### Architecture
-- **Separated Services**: Browser/login and job search are now standalone services
-- **Remote Debugging**: Enhanced remote debugging support for cross-process access
-- **Single Instance**: Strict enforcement of single browser instance to prevent account flagging
+- **Minimized Login Process**
+  - Removed pre-authentication from `browser_service.py`
+  - Removed pre-authentication from `search_jobs.py`
+  - Login check moved to after job search attempt
+  - Login detection happens within `job_search.search_jobs()` method
+  - Only one login check per search operation
 
-#### Job Extraction
-- **Updated JavaScript**: Now uses `data-job-id` attribute as primary extraction method
-- **Improved Selectors**: Better handling of LinkedIn's dynamic content
-- **Enhanced Fallbacks**: Multiple fallback methods for job ID extraction
+- **Optimized Job Search Flow**
+  - Step 1: Direct URL search (builds search URL with parameters)
+  - Step 2: Smart login detection (checks if login required)
+  - Step 3: Conditional login (only if LinkedIn requires it)
+  - Step 4: Enhanced job extraction (improved scrolling and ID collection)
 
-#### Browser Manager
-- **Enhanced Stealth**: Added stealth script injection on browser launch
-- **Random User Agents**: Rotates user agent strings for each browser instance
-- **Security Options**: Added more Chrome options for anti-detection
+- **Simplified JavaScript Injection**
+  - Changed job searching dataset to job IDs
+  - Removed separate javascript injection for finding and extracting jobs
+  - Merged job extraction part into finding job
+  - Returns list of job IDs instead of boolean
 
-#### Job Search
-- **Human-like Delays**: Random delays between actions (2-4 seconds)
-- **Scroll Behavior**: Human-like scroll delays (0.5-2 seconds)
-- **Authentication Checks**: Automatic authentication before each search
+- **Return Types**
+  - `search_jobs()` now returns list of job IDs (was boolean)
+  - `extract_jobs()` converts job IDs to dict of `{"job_id": "job_link"}`
+  - `job_extractor.py` returns structured dictionary with job_id, description, success status, and error messages
+
+- **Job Extractor Module**
+  - Completely rewritten `job_extractor.py`
+  - Now uses project's `Config` and `SecurityManager` for consistency
+  - Integrated with existing stealth infrastructure
+  - Can accept existing WebDriver instance or create new one
+  - Context manager support (`with JobExtractor() as extractor:`)
+  - Command-line interface for standalone usage
 
 ### Fixed
 
-- Browser instance management across processes
-- Job ID extraction reliability
-- Authentication flow improvements
-- Remote debugging connection stability
+- **Browser Session Creation**: Fixed "chrome not reachable" errors
+  - Removed problematic Chrome options (`--disable-web-security`, `--disable-features=IsolateOrigins,site-per-process`)
+  - Added critical stability options
+  - Improved remote debugging configuration
+  - Enhanced error messages with troubleshooting steps
 
-### Security
+- **Job Extraction Consistency**: Fixed issue where job_search could find jobs but extraction failed
+  - Consolidated extraction into JobSearch module
+  - Uses exact same multi-method detection for consistency
+  - Removed separate `job_extractor.py` module from job search flow
 
-- Implemented rate limiting to prevent aggressive scraping
-- Added stealth scripts to mask automation indicators
-- Enhanced browser fingerprint masking
-- Improved human-like behavior simulation
+- **Login Detection**: Fixed false manual login triggers
+  - Simplified `is_logged_in()` to use simple URL-based check
+  - Only checks for `/feed` redirect (logged in users can access feed)
+  - Removed unnecessary manual verification triggers
+
+- **Job Not Found Errors**: Comprehensive error handling in `job_extractor.py`
+  - Detects 404/error pages
+  - Checks for "job no longer available" messages
+  - Verifies job description container exists
+  - Returns clear error messages
+
+### Technical Details
+
+#### Job Search Process
+1. Build search URL directly with query parameters
+2. Navigate to search URL
+3. Check if login is required (URL redirects, page content analysis)
+4. Login only if required (maintains session if already authenticated)
+5. Extract job IDs using JavaScript injection
+6. Scroll to load all available results
+7. Return unique job IDs
+
+#### Job Extraction Process
+1. Navigate to job page in stealth mode
+2. Check if job not found (multiple detection methods)
+3. Extract job ID (URL, page attributes, meta tags)
+4. Extract job description (multiple fallback selectors)
+5. Return structured result dictionary
+
+#### Stealth Mode Implementation
+- Uses `SecurityManager.inject_stealth_scripts()` for automation masking
+- Random user agent rotation
+- CDP commands for navigator property overrides
+- Anti-detection Chrome options
+- Human-like delays and behavior patterns
+
+### Architecture Improvements
+- **On-Demand Authentication**: Login only happens when LinkedIn requires it
+- **Faster Startup**: Browser service starts without waiting for authentication
+- **Better Resource Usage**: Eliminates unnecessary login attempts
+- **Guest Access Support**: Works with LinkedIn guest access when available
+- **Single Login Check**: Only one login check per search operation
+- **Consistent Extraction**: Job search and extraction use same detection methods
+
+---
+
+## Version History
+
+### Version 5 (v5) - Current
+- **5.0.0**: On-demand authentication, optimized direct URL navigation, enhanced job extractor with stealth mode
+
+### Version 4 (v4) - Previous
+- All versions 4.x.x and below were part of Version 4
+- Included standalone service architecture, remote debugging, security features
 
 ---
 
 ## Versioning
 
-This project follows [Semantic Versioning](https://semver.org/):
-- **MAJOR** version for incompatible API changes
+This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
+- **MAJOR** version for incompatible API changes or major architectural updates
 - **MINOR** version for new functionality in a backward-compatible manner
 - **PATCH** version for backward-compatible bug fixes
 
-If you experience connection issues:
-1. Ensure Xvfb is installed: `sudo apt install xvfb`
-2. Or set DISPLAY manually before running services
-3. Or use headless mode: `HEADLESS_MODE=True` in `.env`
+---
+
+## Migration Notes
+
+### From Version 4 to Version 5
+
+**Breaking Changes:**
+- `search_jobs()` now returns `list` of job IDs instead of `bool`
+- `job_extractor.py` is now a standalone module (not used in job search flow)
+- Browser service no longer performs login during initialization
+
+**Migration Steps:**
+1. Update code that calls `search_jobs()` to handle list return type
+2. Use `JobSearch.extract_jobs()` instead of separate `JobExtractor` for job search flow
+3. Use `job_extractor.py` for extracting individual job descriptions (standalone usage)
+4. Browser service will start faster (no login wait)
+
+**Benefits:**
+- Faster startup (no pre-authentication)
+- More efficient (login only when needed)
+- Better guest access support
+- Consistent job extraction
 
 ---
 
