@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
   - Changed job searching dataset to jobid\
   - Removed separte javascript injection for finding and extracting jobs 
   - Merged job extraction part into finding job which will not return list of jobid instead of boolean 
+- **Return type changed from boolean to dict**
+  - Changed the return type of `search_jobs.py` to dict of {"job_id": "job_link"} 
+- **Improved logging**
 
 
 ## [3.2.0] - 2025-11-04
