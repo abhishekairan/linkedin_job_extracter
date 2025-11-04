@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.1] - 2025-11-04
+
+### Changed
+- **Simplified Javascript Injection**
+  - Changed job searching dataset to jobid\
+  - Removed separte javascript injection for finding and extracting jobs 
+  - Merged job extraction part into finding job which will not return list of jobid instead of boolean 
+
+
 ## [3.2.0] - 2025-11-04
 
 ### Fixed
@@ -30,9 +39,6 @@ All notable changes to this project will be documented in this file.
 - Simplified `LinkedInAuth.is_logged_in()` to use simple URL-based check (redirect to `/feed` = logged in)
 - Simplified `LinkedInAuth.login()` to only trigger manual verification if login doesn't redirect to `/feed`
 - Removed `_requires_manual_verification()` method (no longer needed)
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [3.1.4] - 2025-11-03
 

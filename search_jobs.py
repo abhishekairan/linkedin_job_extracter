@@ -60,7 +60,7 @@ def is_browser_service_running():
         return False
 
 
-def wait_for_service(max_wait=30):
+def wait_for_service(max_wait=5):
     """Wait for browser service to be ready."""
     logger.info("Checking if browser service is running...")
     
@@ -132,13 +132,13 @@ def search_jobs_standalone(keywords, location=None, num_results=None):
         
         # Perform job search and extract jobs
         job_search = JobSearch(driver)
-        if not job_search.search_jobs(keywords, location, num_results or 0):
+        jobs_ids = job_search.search_jobs(keywords, location, num_results or 0);
+        if not jobs_ids:
             logger.error("Job search failed")
             return {}
-        
         # Extract job data using the same JobSearch instance
         # This ensures extraction uses the same detection methods as search
-        jobs_data = job_search.extract_jobs()
+        jobs_data = job_search.extract_jobs(jobs_ids)
         
         logger.info(f"✓ Successfully extracted {len(jobs_data)} jobs")
         return jobs_data

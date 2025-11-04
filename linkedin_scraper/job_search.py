@@ -88,37 +88,14 @@ class JobSearch:
                     var cards = [];
                     
                     // Method 1: data-view-name attribute
-                    cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+                    cards = Array.from(document.querySelectorAll('[data-job-id]'));
                     
-                    // Method 2: base-card class
-                    if (cards.length === 0) {
-                        cards = Array.from(document.querySelectorAll('.base-card'));
-                    }
-                    
-                    // Method 3: jobs-list-item class
-                    if (cards.length === 0) {
-                        cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
-                    }
-                    
-                    // Method 4: Any element with job link
-                    if (cards.length === 0) {
-                        var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
-                        cards = links.map(link => link.closest('li') || link.parentElement).filter(Boolean);
-                    }
-                    
-                    return cards.length;
+                    return cards.map((c) => {return c.dataset.jobId});
                 """)
-                
-                if card_count > 0:
-                    logger.info(f"Found {card_count} job cards")
+                if card_count:
+                    logger.info(f"Found {len(card_count)} job cards")
                     jobs_found = True
                     break
-                else:
-                    logger.debug(f"Waiting for job cards... (attempt {attempt}/{max_attempts})")
-            
-            if not jobs_found:
-                logger.error("No job cards found after waiting. LinkedIn may be blocking or page structure changed.")
-                return False
             
             # Additional wait to ensure cards are fully loaded
             SecurityManager.random_delay(1, 2)
@@ -136,73 +113,22 @@ class JobSearch:
             logger.error(f"Job search failed: {str(e)}")
             return False
     
-    def extract_jobs(self):
+    def extract_jobs(self, jobs_ids):
         """
-        Extract job IDs and links using JavaScript injection.
-        Uses the same multi-method detection as search_jobs() for consistency.
-        This method bypasses LinkedIn's HTML protection by using JavaScript injection.
+        Extract job IDs and links 
         
         Returns:
             dict: Dictionary mapping job_id to job_link
                   Format: {job_id: job_link}
         """
         try:
-            logger.info("Extracting job data using JavaScript injection...")
-            
-            # Use the same multi-method detection as search_jobs() to ensure consistency
-            # This is critical: we use the exact same methods that successfully found the cards
-            js_script = """
-            (function() {
-                // Use the SAME multi-method approach as search_jobs() for consistency
-                var cards = [];
-                
-                // Method 1: data-view-name attribute (primary method)
-                cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
-                
-                // Method 2: base-card class (fallback)
-                if (cards.length === 0) {
-                    cards = Array.from(document.querySelectorAll('.base-card'));
-                }
-                
-                // Method 3: jobs-list-item class (fallback)
-                if (cards.length === 0) {
-                    cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
-                }
-                
-                // Method 4: Any element with job link (ultimate fallback)
-                if (cards.length === 0) {
-                    var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
-                    var uniqueCards = new Set();
-                    links.forEach(function(link) {
-                        var card = link.closest('li') || 
-                                   link.closest('.base-card') || 
-                                   link.closest('.jobs-search-results__list-item') ||
-                                   link.parentElement;
-                        if (card) {
-                            uniqueCards.add(card);
-                        }
-                    });
-                    cards = Array.from(uniqueCards);
-                }
-                
-                return cards.map((c) => {return c.dataset.jobId})
-                
-            })();
-            """
-            
-            # Execute JavaScript and get results
-            jobs_data = self.driver.execute_script(js_script)
-            
-            if not jobs_data:
-                jobs_data = {}
-            
-            logger.info(f"Extracted {len(jobs_data)} jobs using the same detection methods as search")
+            for job_id in jobs_ids:
+                job_link = f"https://www.linkedin.com/jobs/view/{job_id}/"
+                jobs_data[job_id] = job_link
             return jobs_data
-        
         except Exception as e:
             logger.error(f"Job extraction failed: {str(e)}")
             return {}
-    
     def _scroll_to_load_more(self, target_count):
         """
         Scroll page to load more job results dynamically.
@@ -282,3 +208,6 @@ class JobSearch:
             logger.warning(f"Error during scrolling: {str(e)}")
             return False
 
+
+
+# https://www.linkedin.com/jobs/search-results/?currentJobId=4333916819&distance=120&f_TPR=r10800&geoId=106728703&keywords=Full%20Stack
