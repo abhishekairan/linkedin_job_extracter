@@ -18,7 +18,6 @@ from pathlib import Path
 from linkedin_scraper.config import Config
 from linkedin_scraper.browser_manager import BrowserManager
 from linkedin_scraper.job_search import JobSearch
-from linkedin_scraper.linkedin_auth import LinkedInAuth
 from linkedin_scraper.security import SecurityManager
 
 # Setup logging
@@ -115,27 +114,17 @@ def search_jobs_standalone(keywords, location=None, num_results=None):
             logger.error("Browser instance is not accessible")
             return {}
         
-        # Check authentication and authenticate if needed
-        auth = LinkedInAuth(driver)
-        if not auth.is_logged_in():
-            logger.warning("Not logged into LinkedIn. Attempting to authenticate...")
-            login_success = auth.login(manual_verification=True)
-            if not login_success:
-                logger.error("Authentication failed. Please check credentials and browser service.")
-                logger.error("Tip: If CAPTCHA/verification is required, ensure HEADLESS_MODE=False in .env")
-                return {}
-            logger.info("✓ Authentication successful")
-        else:
-            logger.info("✓ Already authenticated")
-        
         logger.info("✓ Connected to browser service and ready for job search")
         
         # Perform job search and extract jobs
+        # Using optimized direct URL navigation - login handled automatically by job_search if required
+        # This minimizes login attempts by only logging in when LinkedIn requires it
         job_search = JobSearch(driver)
-        jobs_ids = job_search.search_jobs(keywords, location, num_results or 0);
+        jobs_ids = job_search.search_jobs(keywords, location, num_results or 0)
         if not jobs_ids:
-            logger.error("Job search failed")
+            logger.error("Job search failed - no jobs found")
             return {}
+        
         # Extract job data using the same JobSearch instance
         # This ensures extraction uses the same detection methods as search
         jobs_data = job_search.extract_jobs(jobs_ids)

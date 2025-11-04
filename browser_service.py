@@ -1,13 +1,18 @@
 """
-Standalone browser service that maintains persistent browser and LinkedIn login.
-This service runs continuously, keeping the browser alive and authenticated.
-Run this as a separate process that stays alive.
+Standalone browser service that maintains persistent browser instance.
+This service runs continuously, keeping the browser alive for job searches.
+Login is handled automatically by job_search when LinkedIn requires it.
 
 Usage:
     python browser_service.py
 
 To stop:
     Create a file named 'stop_service' in the project root, or send SIGTERM
+
+Note:
+    This service only maintains the browser instance. Authentication is handled
+    on-demand by job_search.py when LinkedIn requires login, minimizing
+    unnecessary login attempts.
 """
 import logging
 import sys
@@ -17,7 +22,6 @@ import json
 from pathlib import Path
 from linkedin_scraper.config import Config
 from linkedin_scraper.browser_manager import BrowserManager
-from linkedin_scraper.linkedin_auth import LinkedInAuth
 
 # Setup logging
 log_dir = Path(__file__).parent / 'logs'
@@ -42,7 +46,6 @@ STOP_FILE = SERVICE_DIR / 'stop_service'
 # Global browser manager and driver
 browser_manager = None
 driver = None
-auth = None
 running = True
 
 
@@ -69,31 +72,21 @@ def update_status(status_info):
 
 
 def initialize_browser_and_auth():
-    """Initialize browser and authenticate to LinkedIn."""
-    global browser_manager, driver, auth
+    """Initialize browser instance (authentication handled by job_search when needed)."""
+    global browser_manager, driver
     
     try:
         logger.info("Initializing browser service...")
         Config.validate()
         
-        # Create browser manager
+        # Create browser manager and get browser instance
+        # Login is NOT performed here - it will be handled by job_search when needed
+        # This minimizes unnecessary login attempts
         browser_manager = BrowserManager()
         driver = browser_manager.get_or_create_browser()
         
-        # Initialize auth
-        auth = LinkedInAuth(driver)
-        
-        # Check if already logged in
-        if not auth.is_logged_in():
-            logger.info("Not logged in, attempting login...")
-            login_success = auth.login(manual_verification=True)
-            if not login_success:
-                logger.error("Login failed. Service will continue but authentication is required.")
-                return False
-        else:
-            logger.info("Already authenticated to LinkedIn")
-        
-        logger.info("✓ Browser service initialized and authenticated")
+        logger.info("✓ Browser service initialized")
+        logger.info("Note: Login will be handled automatically by job_search when required")
         return True
         
     except Exception as e:
@@ -102,10 +95,10 @@ def initialize_browser_and_auth():
 
 
 def check_browser_health():
-    """Check browser health and re-authenticate if needed."""
-    global driver, auth
+    """Check browser health (login handled by job_search when needed)."""
+    global driver
     
-    if driver is None or auth is None:
+    if driver is None:
         return False
     
     try:
@@ -116,21 +109,10 @@ def check_browser_health():
             initialize_browser_and_auth()
             return False
         
-        # Check if still logged in
-        is_logged_in = auth.is_logged_in()
-        if not is_logged_in:
-            logger.warning("Not logged in, attempting to re-login...")
-            login_success = auth.login(manual_verification=True)
-            if not login_success:
-                logger.error("Re-login failed")
-                is_logged_in = False
-            else:
-                is_logged_in = True
-        
-        # Update status
+        # Update status (login status not tracked here - handled by job_search)
         status_info = {
             'is_alive': browser_status['is_alive'],
-            'logged_in': is_logged_in
+            'logged_in': False  # Not tracked here - login handled on-demand by job_search
         }
         update_status(status_info)
         
@@ -143,7 +125,7 @@ def check_browser_health():
 
 def main():
     """Main service loop."""
-    global running, driver, auth, browser_manager
+    global running, driver, browser_manager
     
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
@@ -152,7 +134,8 @@ def main():
     logger.info("="*60)
     logger.info("LinkedIn Browser Service")
     logger.info("="*60)
-    logger.info("This service maintains a persistent browser and LinkedIn login.")
+    logger.info("This service maintains a persistent browser instance.")
+    logger.info("Login is handled automatically by job_search when required.")
     logger.info("Press Ctrl+C or create 'stop_service' file to stop.")
     logger.info("="*60)
     
@@ -165,7 +148,7 @@ def main():
     browser_status = browser_manager.get_browser_status()
     update_status({
         'is_alive': browser_status['is_alive'],
-        'logged_in': True
+        'logged_in': False  # Login handled on-demand by job_search
     })
     
     # Main service loop

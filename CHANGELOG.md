@@ -5,13 +5,43 @@ All notable changes to this project will be documented in this file.
 ## [3.2.1] - 2025-11-04
 
 ### Changed
+- **Minimized Login Process - On-Demand Authentication**
+  - **Removed pre-authentication from browser_service.py**: Browser service no longer performs login during initialization
+    - Browser service now only maintains browser instance
+    - Login is handled automatically by job_search when LinkedIn requires it
+    - Eliminates unnecessary login attempts when guest access works
+  - **Removed pre-authentication from search_jobs.py**: Login check moved to after job search attempt
+    - Job search now attempts search first, then handles login only if required
+    - Login detection happens within job_search.search_jobs() method
+    - More efficient: only one login check per search operation
+- **Optimized Job Search with Direct URL Navigation**
+  - **Step 1: Direct URL Search**: Now builds and navigates directly to LinkedIn job search URL with query parameters
+    - Supports advanced filters: keywords, location, time filter (1 hour, 24 hours, week, month), geo ID, distance
+    - More control over search parameters without UI interaction
+  - **Step 2: Smart Login Detection**: Checks if login is required by examining URL redirects and page content
+    - Detects redirects to `/uas/login` page
+    - Checks for login elements and "Sign in" prompts
+    - Verifies if job cards are visible (guest access might work)
+    - Only triggers login when actually required
+  - **Step 3: Conditional Login**: Only performs login if LinkedIn requires it
+    - Avoids unnecessary login attempts when guest access works
+    - Maintains existing login session if already authenticated
+    - Navigates back to search URL after successful login
+  - **Step 4: Enhanced Job Extraction**: Improved scrolling and job ID collection
+    - Tracks unique job IDs across scrolls
+    - Removes duplicates while preserving order
+    - Better logging of job discovery progress
 - **Simplified Javascript Injection**
-  - Changed job searching dataset to jobid\
-  - Removed separte javascript injection for finding and extracting jobs 
-  - Merged job extraction part into finding job which will not return list of jobid instead of boolean 
-- **Return type changed from boolean to dict**
-  - Changed the return type of `search_jobs.py` to dict of {"job_id": "job_link"} 
-- **Improved logging**
+  - Changed job searching dataset to job IDs
+  - Removed separate javascript injection for finding and extracting jobs 
+  - Merged job extraction part into finding job which now returns list of job IDs instead of boolean
+- **Return type changed from boolean to list**
+  - Changed the return type of `search_jobs()` to list of job IDs
+  - `extract_jobs()` converts job IDs to dict of {"job_id": "job_link"}
+- **Improved logging and error handling**
+  - Added detailed logging for each step of the search process
+  - Better error messages and scenario handling
+  - Comprehensive comments explaining the optimization strategy
 
 
 ## [3.2.0] - 2025-11-04
