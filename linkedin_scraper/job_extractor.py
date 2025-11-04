@@ -34,21 +34,57 @@ class JobExtractor:
         try:
             logger.info("Injecting JavaScript to extract job cards...")
             
-            # JavaScript to extract job data using data-view-name and data-job-id attributes
+            # JavaScript to extract job data using the same multi-method approach as job_search.py
             # This bypasses LinkedIn's HTML protection which returns scripts instead of raw HTML
+            # Uses the same card detection methods that successfully find cards during search
             js_script = """
             (function() {
-                // Get all job cards using data-view-name attribute
-                var cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+                // Use the same multi-method approach as job_search.py to find cards
+                var cards = [];
+                
+                // Method 1: data-view-name attribute
+                cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+                
+                // Method 2: base-card class
+                if (cards.length === 0) {
+                    cards = Array.from(document.querySelectorAll('.base-card'));
+                }
+                
+                // Method 3: jobs-list-item class
+                if (cards.length === 0) {
+                    cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
+                }
+                
+                // Method 4: Any element with job link (most reliable fallback)
+                if (cards.length === 0) {
+                    var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
+                    // Get unique parent containers for each link
+                    var uniqueCards = new Set();
+                    links.forEach(function(link) {
+                        var card = link.closest('li') || 
+                                  link.closest('.base-card') || 
+                                  link.closest('.jobs-search-results__list-item') ||
+                                  link.parentElement;
+                        if (card) {
+                            uniqueCards.add(card);
+                        }
+                    });
+                    cards = Array.from(uniqueCards);
+                }
+                
                 var jobsData = {};
                 
+                // Extract job data from found cards
                 for (var i = 0; i < cards.length; i++) {
                     var card = cards[i];
                     try {
-                        // Get job ID directly from data-job-id attribute
-                        var jobId = card.getAttribute('data-job-id');
+                        var jobId = null;
+                        var href = '';
                         
-                        // If data-job-id not found, try to get from parent element
+                        // Method 1: Get job ID directly from data-job-id attribute
+                        jobId = card.getAttribute('data-job-id');
+                        
+                        // Method 2: Try to get from parent element
                         if (!jobId) {
                             var parent = card.closest('[data-job-id]');
                             if (parent) {
@@ -56,14 +92,41 @@ class JobExtractor:
                             }
                         }
                         
-                        // If still no job ID, try extracting from link
-                        if (!jobId) {
-                            var linkElement = card.querySelector('.base-card__full-link') || 
-                                             card.querySelector('a[href*="/jobs/view/"]') ||
-                                             card.querySelector('a[data-tracking-control-name*="job"]');
-                            if (linkElement) {
-                                var href = linkElement.getAttribute('href');
-                                if (href) {
+                        // Method 3: Extract from link (most reliable)
+                        var linkElement = card.querySelector('.base-card__full-link') || 
+                                         card.querySelector('a[href*="/jobs/view/"]') ||
+                                         card.querySelector('a[data-tracking-control-name*="job"]') ||
+                                         (card.tagName === 'A' && card.href ? card : null);
+                        
+                        if (linkElement) {
+                            // Get href from link element
+                            if (linkElement.href) {
+                                href = linkElement.href;
+                            } else if (linkElement.getAttribute('href')) {
+                                href = linkElement.getAttribute('href');
+                            }
+                            
+                            // Extract job ID from URL if not already found
+                            if (!jobId && href) {
+                                var match = href.match(/\\/jobs\\/view\\/(\\d+)\\/?/);
+                                if (match && match[1]) {
+                                    jobId = match[1];
+                                }
+                            }
+                        }
+                        
+                        // Method 4: Try to find link anywhere in card if not found yet
+                        if (!href || !jobId) {
+                            var allLinks = card.querySelectorAll('a[href*="/jobs/view/"]');
+                            if (allLinks.length > 0) {
+                                var firstLink = allLinks[0];
+                                if (firstLink.href) {
+                                    href = firstLink.href;
+                                } else if (firstLink.getAttribute('href')) {
+                                    href = firstLink.getAttribute('href');
+                                }
+                                
+                                if (!jobId && href) {
                                     var match = href.match(/\\/jobs\\/view\\/(\\d+)\\/?/);
                                     if (match && match[1]) {
                                         jobId = match[1];
@@ -72,27 +135,25 @@ class JobExtractor:
                             }
                         }
                         
+                        // Build full URL if relative
+                        if (href && href.startsWith('/')) {
+                            href = 'https://www.linkedin.com' + href;
+                        } else if (!href && jobId) {
+                            // Construct URL from job ID if link not found
+                            href = 'https://www.linkedin.com/jobs/view/' + jobId + '/';
+                        }
+                        
+                        // Store job data if we have either job ID or valid link
                         if (jobId) {
-                            // Get job link
-                            var linkElement = card.querySelector('.base-card__full-link') || 
-                                             card.querySelector('a[href*="/jobs/view/"]') ||
-                                             card.querySelector('a[data-tracking-control-name*="job"]');
-                            
-                            var href = '';
-                            if (linkElement) {
-                                href = linkElement.getAttribute('href');
+                            // Use job ID as key
+                            jobsData[jobId] = href || ('https://www.linkedin.com/jobs/view/' + jobId + '/');
+                        } else if (href && href.includes('/jobs/view/')) {
+                            // Extract job ID from href if we have link but no ID
+                            var match = href.match(/\\/jobs\\/view\\/(\\d+)\\/?/);
+                            if (match && match[1]) {
+                                jobId = match[1];
+                                jobsData[jobId] = href;
                             }
-                            
-                            // Build full URL if relative
-                            if (href && href.startsWith('/')) {
-                                href = 'https://www.linkedin.com' + href;
-                            } else if (!href) {
-                                // Construct URL from job ID if link not found
-                                href = 'https://www.linkedin.com/jobs/view/' + jobId + '/';
-                            }
-                            
-                            // Store job data - use job ID as key
-                            jobsData[jobId] = href;
                         }
                     } catch (e) {
                         // Skip this card if there's an error
@@ -131,15 +192,41 @@ class JobExtractor:
         try:
             logger.info("Extracting jobs with detailed information...")
             
-            # JavaScript to extract job data with details using data-view-name attribute
+            # JavaScript to extract job data with details using the same multi-method approach
             js_script = """
-            // Helper function to get elements by attribute value (from v2)
-            function getElementsByAttributeValue(attribute, value) {
-                return Array.from(document.querySelectorAll(`[${attribute}='${value}']`));
+            // Use the same multi-method approach as job_search.py to find cards
+            var cards = [];
+            
+            // Method 1: data-view-name attribute
+            cards = Array.from(document.querySelectorAll('[data-view-name="job-card"]'));
+            
+            // Method 2: base-card class
+            if (cards.length === 0) {
+                cards = Array.from(document.querySelectorAll('.base-card'));
+            }
+            
+            // Method 3: jobs-list-item class
+            if (cards.length === 0) {
+                cards = Array.from(document.querySelectorAll('.jobs-search-results__list-item'));
+            }
+            
+            // Method 4: Any element with job link (most reliable fallback)
+            if (cards.length === 0) {
+                var links = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
+                var uniqueCards = new Set();
+                links.forEach(function(link) {
+                    var card = link.closest('li') || 
+                              link.closest('.base-card') || 
+                              link.closest('.jobs-search-results__list-item') ||
+                              link.parentElement;
+                    if (card) {
+                        uniqueCards.add(card);
+                    }
+                });
+                cards = Array.from(uniqueCards);
             }
             
             var jobsData = {};
-            var cards = getElementsByAttributeValue('data-view-name', 'job-card');
             
             for (var i = 0; i < cards.length; i++) {
                 var card = cards[i];

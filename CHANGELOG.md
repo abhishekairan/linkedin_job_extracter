@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.4] - 2025-11-03
+
+### Fixed
+
+- **Job Extraction Failure**: Fixed issue where job extraction found 0 jobs even though job search successfully found cards
+  - Updated `job_extractor.py` to use the exact same multi-method card detection as `job_search.py`
+  - Now uses all 4 fallback methods: data-view-name, base-card class, jobs-list-item, and job links
+  - Improved job ID and link extraction with multiple fallback methods
+  - Ensures extraction JavaScript matches the successful search detection technique
+
+### Changed
+
+- **Job Extraction Logic**: Completely rewritten to match job search detection methods
+- **Card Detection**: Uses identical fallback sequence as job_search.py for consistency
+
+---
+
 ## [3.1.3] - 2025-11-03
 
 ### Fixed
