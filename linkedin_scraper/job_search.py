@@ -121,6 +121,7 @@ class JobSearch:
             dict: Dictionary mapping job_id to job_link
                   Format: {job_id: job_link}
         """
+        jobs_data = {}
         try:
             for job_id in jobs_ids:
                 job_link = f"https://www.linkedin.com/jobs/view/{job_id}/"
@@ -128,7 +129,7 @@ class JobSearch:
             return jobs_data
         except Exception as e:
             logger.error(f"Job extraction failed: {str(e)}")
-            return {}
+            return jobs_data
     def _scroll_to_load_more(self, target_count):
         """
         Scroll page to load more job results dynamically.
