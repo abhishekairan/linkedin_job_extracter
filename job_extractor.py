@@ -216,7 +216,7 @@ class JobExtractor:
     
     def extract_job_details(self, url):
         """
-        Extract job description and job ID from LinkedIn job page.
+        Extract job description, job card, and job ID from LinkedIn job page.
         
         Args:
             url (str): LinkedIn job URL (e.g., 'https://www.linkedin.com/jobs/view/4236473183')
@@ -225,12 +225,14 @@ class JobExtractor:
             dict: Dictionary containing:
                 - 'job_id' (str): Job ID if found
                 - 'job_description' (str): HTML of job description if found
+                - 'job_card' (str): HTML of job card if found (for logged-in or not logged-in)
                 - 'success' (bool): True if extraction successful
                 - 'error' (str): Error message if failed
         """
         result = {
             'job_id': None,
             'job_description': None,
+            'job_card': None,
             'success': False,
             'error': None
         }
@@ -274,6 +276,24 @@ class JobExtractor:
             # Parse HTML with BeautifulSoup
             soup = BeautifulSoup(html, 'html.parser')
             
+            # Extract job card component
+            # For logged-in users: div with class 'artdeco-card'
+            # For not logged-in users: section with class 'top-card-layout'
+            job_card = None
+            
+            # Try logged-in selector first
+            job_card = soup.find('div', class_='artdeco-card')
+            
+            # Try not logged-in selector if first one didn't work
+            if not job_card:
+                job_card = soup.find('section', class_='top-card-layout')
+            
+            if job_card:
+                result['job_card'] = str(job_card)
+                logger.info("✓ Job card extracted successfully")
+            else:
+                logger.warning("Job card container not found")
+            
             # Find job description container
             # Try multiple selectors as LinkedIn may use different structures
             job_description = None
@@ -289,14 +309,19 @@ class JobExtractor:
             if not job_description:
                 job_description = soup.find('div', {'class': re.compile(r'.*description.*', re.I)})
             
+            # Success if at least one component is found
             if job_description:
                 result['job_description'] = str(job_description)
                 result['success'] = True
                 logger.info("✓ Job description extracted successfully")
+            elif job_card:
+                # If only job card found, still consider it a partial success
+                result['success'] = True
+                logger.info("✓ Job card extracted (job description not found)")
             else:
-                result['error'] = "Job description container not found on page"
+                result['error'] = "Job description and job card containers not found on page"
                 result['success'] = False
-                logger.warning("Job description container not found")
+                logger.warning("Job description and job card containers not found")
             
             return result
             
@@ -318,7 +343,7 @@ class JobExtractor:
     
     def save_job_description(self, url, output_file='job_description.html'):
         """
-        Save job description to HTML file.
+        Save job description and job card to HTML file.
         
         Args:
             url (str): LinkedIn job URL
@@ -334,23 +359,69 @@ class JobExtractor:
                 logger.error(f"Failed to extract job details: {result.get('error', 'Unknown error')}")
                 return False
             
-            if not result['job_description']:
-                logger.error("No job description found to save")
+            if not result['job_description'] and not result['job_card']:
+                logger.error("No job description or job card found to save")
                 return False
+            
+            # Build HTML content with both components
+            html_parts = []
+            html_parts.append('<!DOCTYPE html>')
+            html_parts.append('<html lang="en">')
+            html_parts.append('<head>')
+            html_parts.append('    <meta charset="UTF-8">')
+            html_parts.append('    <meta name="viewport" content="width=device-width, initial-scale=1.0">')
+            html_parts.append('    <title>LinkedIn Job Details</title>')
+            html_parts.append('    <style>')
+            html_parts.append('        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }')
+            html_parts.append('        .job-card-section { margin-bottom: 30px; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }')
+            html_parts.append('        .job-description-section { margin-bottom: 30px; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }')
+            html_parts.append('        h2 { color: #0077b5; margin-top: 0; }')
+            html_parts.append('    </style>')
+            html_parts.append('</head>')
+            html_parts.append('<body>')
+            
+            # Add job ID if available
+            if result['job_id']:
+                html_parts.append(f'    <h1>Job ID: {result["job_id"]}</h1>')
+            
+            # Add job card if available
+            if result['job_card']:
+                html_parts.append('    <div class="job-card-section">')
+                html_parts.append('        <h2>Job Card</h2>')
+                html_parts.append('        ' + result['job_card'])
+                html_parts.append('    </div>')
+            
+            # Add job description if available
+            if result['job_description']:
+                html_parts.append('    <div class="job-description-section">')
+                html_parts.append('        <h2>Job Description</h2>')
+                html_parts.append('        ' + result['job_description'])
+                html_parts.append('    </div>')
+            
+            html_parts.append('</body>')
+            html_parts.append('</html>')
             
             # Save to file
             output_path = Path(output_file)
             with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(result['job_description'])
+                f.write('\n'.join(html_parts))
             
-            logger.info(f"✓ Job description saved to: {output_path}")
+            logger.info(f"✓ Job details saved to: {output_path}")
             
             if result['job_id']:
                 logger.info(f"✓ Job ID: {result['job_id']}")
+            if result['job_card']:
+                logger.info("✓ Job card saved")
+            if result['job_description']:
+                logger.info("✓ Job description saved")
             
-            print(f'Job description saved to {output_path}')
+            print(f'Job details saved to {output_path}')
             if result['job_id']:
                 print(f'Job ID: {result["job_id"]}')
+            if result['job_card']:
+                print('Job card: ✓')
+            if result['job_description']:
+                print('Job description: ✓')
             
             return True
             

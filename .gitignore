@@ -6,6 +6,7 @@ __pycache__/
 # Output files
 output/
 jobs_output.json
+job_description.html
 
 # C extensions
 *.so

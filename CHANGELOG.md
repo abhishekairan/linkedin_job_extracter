@@ -13,6 +13,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.1.0] - 2025-11-05
+
+### Added
+
+#### Job Extractor Enhancements
+- **Job Card Extraction**
+  - Extracts job card component alongside job description
+  - Supports both logged-in users (`div.artdeco-card`) and not logged-in users (`section.top-card-layout`)
+  - Automatically detects which selector to use based on page structure
+  - Job card includes job header information (title, company, location, etc.)
+
+- **Enhanced HTML Output**
+  - `save_job_description()` now saves both job card and job description in a single HTML file
+  - Includes styled HTML structure with proper sections
+  - Job card and job description are clearly separated with headers
+  - Basic CSS styling for better readability
+
+### Changed
+
+- **Job Extraction Return Value**
+  - `extract_job_details()` now returns `job_card` field in addition to `job_description`
+  - Success logic updated: extraction succeeds if either job card or job description is found
+  - Result dictionary includes: `job_id`, `job_description`, `job_card`, `success`, `error`
+
+- **HTML Output Format**
+  - Output HTML file now contains complete document structure with `<head>`, `<body>`, and styling
+  - Job ID displayed at the top if available
+  - Each component (job card, job description) in its own styled section
+
+### Fixed
+
+- **Syntax Error**: Fixed Unicode curly apostrophe (U+2019) in string literals that caused SyntaxError
+  - Replaced with standard ASCII apostrophes (U+27)
+  - Affected line 178 in `job_extractor.py`
+
+---
+
 ## [5.0.0] - 2025-11-04
 
 ### Major Version Update: v5
@@ -134,8 +171,9 @@ This version represents a major architectural improvement with on-demand authent
 1. Navigate to job page in stealth mode
 2. Check if job not found (multiple detection methods)
 3. Extract job ID (URL, page attributes, meta tags)
-4. Extract job description (multiple fallback selectors)
-5. Return structured result dictionary
+4. Extract job card (for logged-in: `div.artdeco-card`, for not logged-in: `section.top-card-layout`)
+5. Extract job description (multiple fallback selectors)
+6. Return structured result dictionary with job_id, job_description, and job_card
 
 #### Stealth Mode Implementation
 - Uses `SecurityManager.inject_stealth_scripts()` for automation masking
@@ -157,6 +195,7 @@ This version represents a major architectural improvement with on-demand authent
 ## Version History
 
 ### Version 5 (v5) - Current
+- **5.1.0**: Job card extraction, enhanced HTML output with styled sections, fixed Unicode syntax error
 - **5.0.0**: On-demand authentication, optimized direct URL navigation, enhanced job extractor with stealth mode
 
 ### Version 4 (v4) - Previous
@@ -207,4 +246,5 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 - Database integration
 - Webhook notifications
 - Scheduled search automation
+
 
