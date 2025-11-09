@@ -192,3 +192,7 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+job_description.html
+jobs_output.json
+output.json
+job_description.html

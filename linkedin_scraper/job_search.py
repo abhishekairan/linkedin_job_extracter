@@ -38,6 +38,49 @@ class JobSearch:
         'month': 'r2592000',  # Last month
     }
     
+    # Job type filter codes (f_JT parameter)
+    JOB_TYPE_CODES = {
+        'F': 'Full-time',
+        'P': 'Part-time',
+        'C': 'Contract',
+        'T': 'Temporary',
+        'I': 'Internship',
+        'V': 'Volunteer',
+    }
+    
+    # Experience level filter codes (f_E parameter)
+    EXPERIENCE_LEVEL_CODES = {
+        '1': 'Internship',
+        '2': 'Entry level',
+        '3': 'Associate',
+        '4': 'Mid-Senior level',
+        '5': 'Director',
+        '6': 'Executive',
+    }
+    
+    # Work type filter codes (f_WT parameter)
+    WORK_TYPE_CODES = {
+        '1': 'On-site',
+        '2': 'Hybrid',
+        '3': 'Remote',
+    }
+    
+    # Job function filter codes (f_F parameter)
+    JOB_FUNCTION_CODES = {
+        'sale': 'Sales',
+        'mgmt': 'Management',
+        'acct': 'Accounting',
+        'it': 'Information Technology',
+        'mktg': 'Marketing',
+        'hr': 'Human Resources',
+    }
+    
+    # Sort options (sortBy parameter)
+    SORT_OPTIONS = {
+        'DD': 'Date Descending (newest first)',
+        'R': 'Relevance (default)',
+    }
+    
     def __init__(self, driver):
         """
         Initialize JobSearch with WebDriver instance.
@@ -48,16 +91,39 @@ class JobSearch:
         self.driver = driver
         self.wait = WebDriverWait(driver, 10)
     
-    def _build_search_url(self, keywords, location=None, time_filter=None, geo_id=None, distance=None):
+    def _build_search_url(self, keywords, location=None, time_filter=None, geo_id=None, distance=None,
+                          job_types=None, experience_levels=None, work_types=None, easy_apply=None,
+                          actively_hiring=None, verified_jobs=None, jobs_at_connections=None,
+                          job_function=None, industry=None, sort_by=None, city_id=None, company_id=None):
         """
         Build LinkedIn job search URL with query parameters.
         
         Args:
             keywords (str): Job search keywords (required)
             location (str, optional): Job location filter (e.g., "United States", "New York")
-            time_filter (str, optional): Time filter - 'any', '1hour', '24hours', 'week', 'month'
+            time_filter (str, optional): Time filter - 'any', '1hour', '2hours', '3hours', '4hours',
+                                         '6hours', '8hours', '12hours', '1day', 'week', 'month'
             geo_id (str, optional): LinkedIn geo ID for location (numeric string)
-            distance (int, optional): Distance in miles/km (default: 120)
+            distance (int, optional): Distance in miles/km from location (default: 120)
+            job_types (list or str, optional): Job type filters - 'F' (Full-time), 'P' (Part-time),
+                                               'C' (Contract), 'T' (Temporary), 'I' (Internship), 'V' (Volunteer)
+                                               Can be a list like ['F', 'C'] or comma-separated string 'F,C'
+            experience_levels (list or str, optional): Experience level filters - '1' (Internship), '2' (Entry),
+                                                        '3' (Associate), '4' (Mid-Senior), '5' (Director), '6' (Executive)
+                                                        Can be a list like ['4', '5'] or comma-separated string '4,5'
+            work_types (list or str, optional): Work type filters - '1' (On-site), '2' (Hybrid), '3' (Remote)
+                                                Can be a list like ['2', '3'] or comma-separated string '2,3'
+            easy_apply (bool, optional): Filter for Easy Apply jobs (True) or all jobs (False)
+            actively_hiring (bool, optional): Filter for companies actively hiring (True) or all companies (False)
+            verified_jobs (bool, optional): Filter for verified job postings only (True) or all jobs (False)
+            jobs_at_connections (bool, optional): Filter for jobs at companies with connections (True) or all jobs (False)
+            job_function (list or str, optional): Job function filters - 'sale', 'mgmt', 'acct', 'it', 'mktg', 'hr'
+                                                  Can be a list like ['it', 'mktg'] or comma-separated string 'it,mktg'
+            industry (list or str, optional): Industry filter codes (numeric strings, see LinkedIn documentation)
+                                              Can be a list like ['96', '4'] or comma-separated string '96,4'
+            sort_by (str, optional): Sort option - 'DD' (Date Descending/newest first), 'R' (Relevance/default)
+            city_id (str, optional): Filter by specific city ID (numeric string)
+            company_id (str, optional): Filter by specific company ID (numeric string)
         
         Returns:
             str: Complete LinkedIn job search URL
@@ -78,9 +144,9 @@ class JobSearch:
         
         # Add distance (default 120 if not specified)
         if distance:
-            params['distance'] = distance
+            params['distance'] = str(distance)
         else:
-            params['distance'] = 120
+            params['distance'] = '120'
         
         # Add time filter (f_TPR parameter)
         if time_filter and time_filter in self.TIME_FILTERS:
@@ -88,8 +154,88 @@ class JobSearch:
             if tpr_value:
                 params['f_TPR'] = tpr_value
         
+        # Add job type filter (f_JT parameter) - supports multiple values
+        if job_types:
+            if isinstance(job_types, str):
+                # Handle comma-separated string
+                job_types = [jt.strip().upper() for jt in job_types.split(',')]
+            # Validate and filter job types
+            valid_job_types = [jt for jt in job_types if jt.upper() in self.JOB_TYPE_CODES]
+            if valid_job_types:
+                # Join with comma (URL encoding will be handled by urlencode)
+                params['f_JT'] = ','.join(valid_job_types)
+        
+        # Add experience level filter (f_E parameter) - supports multiple values
+        if experience_levels:
+            if isinstance(experience_levels, str):
+                # Handle comma-separated string
+                experience_levels = [e.strip() for e in experience_levels.split(',')]
+            # Validate experience levels
+            valid_levels = [e for e in experience_levels if str(e) in self.EXPERIENCE_LEVEL_CODES]
+            if valid_levels:
+                params['f_E'] = ','.join(valid_levels)
+        
+        # Add work type filter (f_WT parameter) - supports multiple values
+        if work_types:
+            if isinstance(work_types, str):
+                # Handle comma-separated string
+                work_types = [wt.strip() for wt in work_types.split(',')]
+            # Validate work types
+            valid_work_types = [wt for wt in work_types if str(wt) in self.WORK_TYPE_CODES]
+            if valid_work_types:
+                params['f_WT'] = ','.join(valid_work_types)
+        
+        # Add Easy Apply filter (f_EA parameter)
+        if easy_apply is not None:
+            params['f_EA'] = 'true' if easy_apply else 'false'
+        
+        # Add Actively Hiring filter (f_AL parameter)
+        if actively_hiring is not None:
+            params['f_AL'] = 'true' if actively_hiring else 'false'
+        
+        # Add Verified Jobs filter (f_VJ parameter)
+        if verified_jobs is not None:
+            params['f_VJ'] = 'true' if verified_jobs else 'false'
+        
+        # Add Jobs at Connections filter (f_JIYN parameter)
+        if jobs_at_connections is not None:
+            params['f_JIYN'] = 'true' if jobs_at_connections else 'false'
+        
+        # Add job function filter (f_F parameter) - supports multiple values
+        if job_function:
+            if isinstance(job_function, str):
+                # Handle comma-separated string
+                job_function = [jf.strip().lower() for jf in job_function.split(',')]
+            # Validate job functions
+            valid_functions = [jf for jf in job_function if jf.lower() in self.JOB_FUNCTION_CODES]
+            if valid_functions:
+                params['f_F'] = ','.join(valid_functions)
+        
+        # Add industry filter (f_SB2 parameter) - supports multiple values
+        if industry:
+            if isinstance(industry, str):
+                # Handle comma-separated string
+                industry = [ind.strip() for ind in industry.split(',')]
+            # Industry codes are numeric strings, validate they're numeric
+            valid_industries = [ind for ind in industry if str(ind).isdigit()]
+            if valid_industries:
+                params['f_SB2'] = ','.join(valid_industries)
+        
+        # Add sort option (sortBy parameter)
+        if sort_by and sort_by.upper() in self.SORT_OPTIONS:
+            params['sortBy'] = sort_by.upper()
+        
+        # Add city ID filter (f_PP parameter)
+        if city_id:
+            params['f_PP'] = str(city_id)
+        
+        # Add company ID filter (f_C parameter)
+        if company_id:
+            params['f_C'] = str(company_id)
+        
         # Build URL with query string
-        query_string = urllib.parse.urlencode(params)
+        # Use doseq=True to properly handle multiple values (though we're joining them manually)
+        query_string = urllib.parse.urlencode(params, doseq=False)
         url = f"{self.JOBS_SEARCH_URL}?{query_string}"
         
         logger.debug(f"Built search URL: {url}")
@@ -155,7 +301,10 @@ class JobSearch:
             # On error, assume login required for safety
             return True
     
-    def search_jobs(self, keywords, location=None, num_results=25, time_filter=None, geo_id=None, distance=None):
+    def search_jobs(self, keywords, location=None, num_results=25, time_filter=None, geo_id=None, distance=None,
+                   job_types=None, experience_levels=None, work_types=None, easy_apply=None,
+                   actively_hiring=None, verified_jobs=None, jobs_at_connections=None,
+                   job_function=None, industry=None, sort_by=None, city_id=None, company_id=None):
         """
         Search for jobs on LinkedIn using optimized direct URL navigation.
         
@@ -170,9 +319,25 @@ class JobSearch:
             keywords (str): Job search keywords (required)
             location (str, optional): Job location filter (e.g., "United States", "New York")
             num_results (int, optional): Number of results to load (default: 25, ignored - loads all)
-            time_filter (str, optional): Time filter - 'any', '1hour', '24hours', 'week', 'month'
+            time_filter (str, optional): Time filter - 'any', '1hour', '2hours', '3hours', '4hours',
+                                         '6hours', '8hours', '12hours', '1day', 'week', 'month'
             geo_id (str, optional): LinkedIn geo ID for location (numeric string)
-            distance (int, optional): Distance in miles/km (default: 120)
+            distance (int, optional): Distance in miles/km from location (default: 120)
+            job_types (list or str, optional): Job type filters - 'F', 'P', 'C', 'T', 'I', 'V'
+                                               Can be list or comma-separated string like 'F,C'
+            experience_levels (list or str, optional): Experience level filters - '1' to '6'
+                                                       Can be list or comma-separated string like '4,5'
+            work_types (list or str, optional): Work type filters - '1' (On-site), '2' (Hybrid), '3' (Remote)
+                                                Can be list or comma-separated string like '2,3'
+            easy_apply (bool, optional): Filter for Easy Apply jobs (True) or all jobs (False)
+            actively_hiring (bool, optional): Filter for companies actively hiring (True) or all companies (False)
+            verified_jobs (bool, optional): Filter for verified job postings only (True) or all jobs (False)
+            jobs_at_connections (bool, optional): Filter for jobs at companies with connections (True) or all jobs (False)
+            job_function (list or str, optional): Job function filters - 'sale', 'mgmt', 'acct', 'it', 'mktg', 'hr'
+            industry (list or str, optional): Industry filter codes (numeric strings)
+            sort_by (str, optional): Sort option - 'DD' (Date Descending), 'R' (Relevance)
+            city_id (str, optional): Filter by specific city ID (numeric string)
+            company_id (str, optional): Filter by specific company ID (numeric string)
         
         Returns:
             list: List of job IDs found, or empty list if search failed
@@ -183,9 +348,24 @@ class JobSearch:
                 logger.info(f"Location filter: {location}")
             if time_filter:
                 logger.info(f"Time filter: {time_filter}")
+            if job_types:
+                logger.info(f"Job types: {job_types}")
+            if experience_levels:
+                logger.info(f"Experience levels: {experience_levels}")
+            if work_types:
+                logger.info(f"Work types: {work_types}")
+            if easy_apply is not None:
+                logger.info(f"Easy Apply: {easy_apply}")
+            if actively_hiring is not None:
+                logger.info(f"Actively Hiring: {actively_hiring}")
             
-            # Step 1: Build search URL directly
-            search_url = self._build_search_url(keywords, location, time_filter, geo_id, distance)
+            # Step 1: Build search URL directly with all parameters
+            search_url = self._build_search_url(
+                keywords, location, time_filter, geo_id, distance,
+                job_types, experience_levels, work_types, easy_apply,
+                actively_hiring, verified_jobs, jobs_at_connections,
+                job_function, industry, sort_by, city_id, company_id
+            )
             logger.info(f"Navigating directly to search URL: {search_url}")
             
             # Navigate to search URL

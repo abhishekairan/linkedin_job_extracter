@@ -13,6 +13,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.2.0] - 2025-01-XX
+
+### Added
+
+#### Advanced LinkedIn Job Search Filters
+- **Job Type Filters (f_JT)**
+  - Support for Full-time (F), Part-time (P), Contract (C), Temporary (T), Internship (I), Volunteer (V)
+  - Multiple job types can be specified (comma-separated)
+  - Command-line argument: `--jobtype` or `--job-type`
+  - Example: `--jobtype F,C` for Full-time and Contract positions
+
+- **Experience Level Filters (f_E)**
+  - Support for all experience levels: Internship (1), Entry (2), Associate (3), Mid-Senior (4), Director (5), Executive (6)
+  - Multiple levels can be specified (comma-separated)
+  - Command-line argument: `--experience` or `--experience-level`
+  - Example: `--experience 4,5,6` for Mid-Senior, Director, and Executive roles
+
+- **Work Type Filters (f_WT)**
+  - Support for On-site (1), Hybrid (2), Remote (3)
+  - Multiple work types can be specified (comma-separated)
+  - Command-line argument: `--worktype` or `--work-type`
+  - Example: `--worktype 2,3` for Hybrid and Remote positions
+
+- **Easy Apply Filter (f_EA)**
+  - Filter for jobs with Easy Apply enabled
+  - Command-line arguments: `--easy-apply` (enable) or `--no-easy-apply` (disable)
+  - Boolean filter: `True` for Easy Apply only, `False` for all jobs
+
+- **Actively Hiring Filter (f_AL)**
+  - Filter for companies actively hiring
+  - Command-line arguments: `--actively-hiring` (enable) or `--no-actively-hiring` (disable)
+  - Boolean filter: `True` for actively hiring companies only
+
+- **Verified Jobs Filter (f_VJ)**
+  - Filter for verified job postings only
+  - Command-line arguments: `--verified-jobs` (enable) or `--no-verified-jobs` (disable)
+  - Helps avoid scam postings
+
+- **Jobs at Connections Filter (f_JIYN)**
+  - Filter for jobs at companies where you have connections
+  - Command-line arguments: `--jobs-at-connections` (enable) or `--no-jobs-at-connections` (disable)
+  - Requires LinkedIn login
+
+- **Job Function Filters (f_F)**
+  - Support for Sales (sale), Management (mgmt), Accounting (acct), IT (it), Marketing (mktg), HR (hr)
+  - Multiple functions can be specified (comma-separated)
+  - Command-line argument: `--job-function`
+  - Example: `--job-function it,mktg` for IT and Marketing functions
+
+- **Industry Filters (f_SB2)**
+  - Support for industry codes (numeric strings)
+  - Multiple industries can be specified (comma-separated)
+  - Command-line argument: `--industry`
+  - Example: `--industry 96,4` for Information Technology and Services (96) and Computer Software (4)
+  - See `Docs/Linkedin_search_query.md` for complete industry codes list
+
+- **Sorting Options (sortBy)**
+  - Date Descending (DD): Sort by newest jobs first
+  - Relevance (R): Default sorting by relevance
+  - Command-line argument: `--sort-by`
+  - Example: `--sort-by DD` for newest jobs first
+
+- **Advanced Location Filters**
+  - City ID filter (f_PP): Filter by specific city using numeric city ID
+  - Command-line argument: `--city-id`
+  - Company ID filter (f_C): Filter by specific company using numeric company ID
+  - Command-line argument: `--company-id`
+
+#### Enhanced URL Builder
+- **Comprehensive Filter Support**
+  - `JobSearch._build_search_url()` now supports all major LinkedIn search parameters
+  - Automatic validation of filter values
+  - Support for multiple values (comma-separated strings or lists)
+  - Proper URL encoding for all parameters
+  - Filter codes defined as class constants for easy reference
+
+#### Command-Line Interface Enhancements
+- **Extended CLI Arguments**
+  - All filters available as command-line arguments in `search_jobs.py`
+  - Backward compatible with existing positional arguments
+  - Comprehensive help text with examples
+  - Filter validation and error handling
+
+### Changed
+
+- **JobSearch.search_jobs() Method**
+  - Extended method signature to accept all filter parameters
+  - Filters are now passed as keyword arguments
+  - Improved logging for applied filters
+  - Better parameter documentation
+
+- **search_jobs.py CLI**
+  - Enhanced argument parser with all filter options
+  - Support for combining multiple filters
+  - Improved examples in help text
+  - Filter parameters passed to search functions via dictionary
+
+- **URL Building Logic**
+  - Enhanced `_build_search_url()` to handle all LinkedIn search parameters
+  - Improved parameter validation
+  - Better handling of multiple values (comma-separated)
+  - Automatic URL encoding
+
+### Technical Details
+
+#### Filter Implementation
+- All filters are implemented according to LinkedIn's URL parameter specification
+- Filter values are validated against predefined constants
+- Multiple values are joined with commas (URL-encoded as `%2C`)
+- Boolean filters use `true`/`false` string values
+- Numeric filters (geo_id, city_id, company_id, industry) accept string or numeric inputs
+
+#### Code Organization
+- Filter codes defined as class constants in `JobSearch` class
+- Constants include: `JOB_TYPE_CODES`, `EXPERIENCE_LEVEL_CODES`, `WORK_TYPE_CODES`, `JOB_FUNCTION_CODES`, `SORT_OPTIONS`
+- Easy to extend with new filter options in the future
+
+---
+
 ## [5.1.0] - 2025-11-05
 
 ### Added
@@ -195,6 +314,7 @@ This version represents a major architectural improvement with on-demand authent
 ## Version History
 
 ### Version 5 (v5) - Current
+- **5.2.0**: Advanced LinkedIn job search filters (job type, experience, work type, easy apply, etc.), enhanced CLI with filter arguments
 - **5.1.0**: Job card extraction, enhanced HTML output with styled sections, fixed Unicode syntax error
 - **5.0.0**: On-demand authentication, optimized direct URL navigation, enhanced job extractor with stealth mode
 

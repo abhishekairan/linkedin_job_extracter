@@ -114,7 +114,7 @@ def get_browser_instance():
         return None, None
 
 
-def search_jobs_single(keywords, location, driver, job_search, num_results=None):
+def search_jobs_single(keywords, location, driver, job_search, num_results=None, filters=None):
     """
     Perform a single job search with given keywords and location.
     
@@ -124,6 +124,7 @@ def search_jobs_single(keywords, location, driver, job_search, num_results=None)
         driver: Selenium WebDriver instance
         job_search: JobSearch instance
         num_results (int, optional): Number of results (ignored - loads all available)
+        filters (dict, optional): Dictionary of filter parameters to pass to search_jobs()
     
     Returns:
         dict: Dictionary mapping job_id to job_link
@@ -134,10 +135,18 @@ def search_jobs_single(keywords, location, driver, job_search, num_results=None)
         # Rate limit to prevent account flagging
         security_manager.rate_limit_search()
         
+        # Prepare filter parameters (default to empty dict if not provided)
+        filter_params = filters or {}
+        
         # Perform job search and extract jobs
         # Using optimized direct URL navigation - login handled automatically by job_search if required
         # This minimizes login attempts by only logging in when LinkedIn requires it
-        jobs_ids = job_search.search_jobs(keywords, location, num_results or 0, time_filter='3hours')
+        jobs_ids = job_search.search_jobs(
+            keywords, 
+            location, 
+            num_results or 0,
+            **filter_params
+        )
         if not jobs_ids:
             logger.warning(f"No jobs found for '{keywords}' in {location}")
             return {}
@@ -154,7 +163,7 @@ def search_jobs_single(keywords, location, driver, job_search, num_results=None)
         return {}
 
 
-def search_jobs_standalone(keywords, locations=None, num_results=None):
+def search_jobs_standalone(keywords, locations=None, num_results=None, filters=None):
     """
     Search for jobs using the shared browser instance.
     Supports both single and multiple keywords/locations.
@@ -163,6 +172,7 @@ def search_jobs_standalone(keywords, locations=None, num_results=None):
         keywords (str or list): Job search keywords (single string or list of strings)
         locations (str or list, optional): Job location filter (single string or list of strings)
         num_results (int, optional): Number of results (ignored - loads all available)
+        filters (dict, optional): Dictionary of filter parameters to pass to search_jobs()
     
     Returns:
         dict: Dictionary mapping job_id to job_link (combined results from all searches)
@@ -203,8 +213,8 @@ def search_jobs_standalone(keywords, locations=None, num_results=None):
                 search_count += 1
                 logger.info(f"[{search_count}/{total_searches}] Processing: keyword='{keyword}', location='{location or 'None'}'")
                 
-                # Perform single search
-                jobs_data = search_jobs_single(keyword, location, driver, job_search, num_results)
+                # Perform single search with filters
+                jobs_data = search_jobs_single(keyword, location, driver, job_search, num_results, filters)
                 
                 # Merge results (all_jobs dict will automatically deduplicate by job_id)
                 all_jobs.update(jobs_data)
@@ -224,11 +234,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Basic search
   python search_jobs.py "Python Developer"
   python search_jobs.py "Data Scientist" "New York"
-  python search_jobs.py "Software Engineer" "United States" output.json
+  
+  # With filters
+  python search_jobs.py "Software Engineer" --location "United States" --jobtype F --worktype 2,3 --experience 4,5
+  python search_jobs.py "Developer" --location "New York" --time-filter week --easy-apply --sort-by DD
+  
+  # Multiple keywords/locations
   python search_jobs.py --keywords "Python Developer,Data Scientist" --locations "United States,New York"
   python search_jobs.py --keywords "Python,Java" --locations "New York,San Francisco" output.json
+  
+  # Advanced filters
+  python search_jobs.py "Manager" --location "United States" --jobtype F --experience 5,6 --job-function mgmt --industry 96,4
         """
     )
     
@@ -241,6 +260,60 @@ Examples:
     # Named arguments for multiple keywords/locations
     parser.add_argument('--keywords', dest='keywords_list', help='Comma-separated list of job search keywords')
     parser.add_argument('--locations', dest='locations_list', help='Comma-separated list of job locations')
+    parser.add_argument('--location', dest='location_named', help='Job location filter (alternative to positional)')
+    
+    # Core search parameters
+    parser.add_argument('--geo-id', dest='geo_id', help='LinkedIn geo ID for location (numeric string, more precise than location name)')
+    parser.add_argument('--distance', type=int, help='Search radius in miles/km from location (default: 120)')
+    parser.add_argument('--time-filter', dest='time_filter', 
+                       choices=['any', '1hour', '2hours', '3hours', '4hours', '6hours', '8hours', '12hours', '1day', 'week', 'month'],
+                       help='Time filter for job posting date')
+    
+    # Job type filters (f_JT)
+    parser.add_argument('--jobtype', '--job-type', dest='job_types',
+                       help='Job type filters: F (Full-time), P (Part-time), C (Contract), T (Temporary), I (Internship), V (Volunteer). Can be comma-separated like "F,C"')
+    
+    # Experience level filters (f_E)
+    parser.add_argument('--experience', '--experience-level', dest='experience_levels',
+                       help='Experience level filters: 1 (Internship), 2 (Entry), 3 (Associate), 4 (Mid-Senior), 5 (Director), 6 (Executive). Can be comma-separated like "4,5"')
+    
+    # Work type filters (f_WT)
+    parser.add_argument('--worktype', '--work-type', dest='work_types',
+                       help='Work type filters: 1 (On-site), 2 (Hybrid), 3 (Remote). Can be comma-separated like "2,3"')
+    
+    # Specialized filters
+    parser.add_argument('--easy-apply', dest='easy_apply', action='store_true',
+                       help='Filter for Easy Apply jobs only')
+    parser.add_argument('--no-easy-apply', dest='easy_apply', action='store_false',
+                       help='Include all jobs (not just Easy Apply)')
+    parser.add_argument('--actively-hiring', dest='actively_hiring', action='store_true',
+                       help='Filter for companies actively hiring')
+    parser.add_argument('--no-actively-hiring', dest='actively_hiring', action='store_false',
+                       help='Include all companies (not just actively hiring)')
+    parser.add_argument('--verified-jobs', dest='verified_jobs', action='store_true',
+                       help='Filter for verified job postings only')
+    parser.add_argument('--no-verified-jobs', dest='verified_jobs', action='store_false',
+                       help='Include all job postings (not just verified)')
+    parser.add_argument('--jobs-at-connections', dest='jobs_at_connections', action='store_true',
+                       help='Filter for jobs at companies where you have connections')
+    parser.add_argument('--no-jobs-at-connections', dest='jobs_at_connections', action='store_false',
+                       help='Include all jobs (not just at connections)')
+    
+    # Job function and industry filters
+    parser.add_argument('--job-function', dest='job_function',
+                       help='Job function filters: sale, mgmt, acct, it, mktg, hr. Can be comma-separated like "it,mktg"')
+    parser.add_argument('--industry', 
+                       help='Industry filter codes (numeric strings). Can be comma-separated like "96,4". See LinkedIn documentation for codes.')
+    
+    # Sorting
+    parser.add_argument('--sort-by', dest='sort_by', choices=['DD', 'R'],
+                       help='Sort option: DD (Date Descending/newest first), R (Relevance/default)')
+    
+    # Advanced filters
+    parser.add_argument('--city-id', dest='city_id',
+                       help='Filter by specific city ID (numeric string)')
+    parser.add_argument('--company-id', dest='company_id',
+                       help='Filter by specific company ID (numeric string)')
     
     args = parser.parse_args()
     
@@ -263,24 +336,62 @@ Examples:
         parser.print_help()
         sys.exit(1)
     
-    # Parse locations
+    # Parse locations (support both positional and --location)
+    location_value = args.location_named or args.location
     if args.locations_list:
         # Use --locations if provided
         locations = [l.strip() for l in args.locations_list.split(',')]
-    elif args.location:
-        # Use positional location
-        if ',' in args.location:
-            locations = [l.strip() for l in args.location.split(',')]
+    elif location_value:
+        # Use positional or --location
+        if ',' in location_value:
+            locations = [l.strip() for l in location_value.split(',')]
         else:
-            locations = [args.location]
+            locations = [location_value]
     else:
         locations = [None]
     
     logger.info(f"Keywords: {keywords}")
     logger.info(f"Locations: {locations}")
     
+    # Build filters dictionary
+    filters = {}
+    
+    if args.geo_id:
+        filters['geo_id'] = args.geo_id
+    if args.distance:
+        filters['distance'] = args.distance
+    if args.time_filter:
+        filters['time_filter'] = args.time_filter
+    if args.job_types:
+        filters['job_types'] = args.job_types
+    if args.experience_levels:
+        filters['experience_levels'] = args.experience_levels
+    if args.work_types:
+        filters['work_types'] = args.work_types
+    if args.easy_apply is not None:
+        filters['easy_apply'] = args.easy_apply
+    if args.actively_hiring is not None:
+        filters['actively_hiring'] = args.actively_hiring
+    if args.verified_jobs is not None:
+        filters['verified_jobs'] = args.verified_jobs
+    if args.jobs_at_connections is not None:
+        filters['jobs_at_connections'] = args.jobs_at_connections
+    if args.job_function:
+        filters['job_function'] = args.job_function
+    if args.industry:
+        filters['industry'] = args.industry
+    if args.sort_by:
+        filters['sort_by'] = args.sort_by
+    if args.city_id:
+        filters['city_id'] = args.city_id
+    if args.company_id:
+        filters['company_id'] = args.company_id
+    
+    if filters:
+        logger.info(f"Applied filters: {filters}")
+    
     # Perform search
-    results = search_jobs_standalone(keywords, locations)
+    results = search_jobs_standalone(keywords, locations, filters=filters)
     
     if results:
         # Save results to file
