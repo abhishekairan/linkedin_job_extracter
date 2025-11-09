@@ -104,7 +104,7 @@ class JobSearch:
             time_filter (str, optional): Time filter - 'any', '1hour', '2hours', '3hours', '4hours',
                                          '6hours', '8hours', '12hours', '1day', 'week', 'month'
             geo_id (str, optional): LinkedIn geo ID for location (numeric string)
-            distance (int, optional): Distance in miles/km from location (default: 120)
+            distance (int, optional): Distance in miles/km from location (only added if specified)
             job_types (list or str, optional): Job type filters - 'F' (Full-time), 'P' (Part-time),
                                                'C' (Contract), 'T' (Temporary), 'I' (Internship), 'V' (Volunteer)
                                                Can be a list like ['F', 'C'] or comma-separated string 'F,C'
@@ -156,7 +156,7 @@ class JobSearch:
                 params['f_TPR'] = tpr_value
         
         # Add job type filter (f_JT parameter) - supports multiple values
-        if job_types:
+        if job_types is not None:
             if isinstance(job_types, str):
                 # Handle comma-separated string
                 job_types = [jt.strip().upper() for jt in job_types.split(',')]
@@ -167,7 +167,7 @@ class JobSearch:
                 params['f_JT'] = ','.join(valid_job_types)
         
         # Add experience level filter (f_E parameter) - supports multiple values
-        if experience_levels:
+        if experience_levels is not None:
             if isinstance(experience_levels, str):
                 # Handle comma-separated string
                 experience_levels = [e.strip() for e in experience_levels.split(',')]
@@ -177,7 +177,7 @@ class JobSearch:
                 params['f_E'] = ','.join(valid_levels)
         
         # Add work type filter (f_WT parameter) - supports multiple values
-        if work_types:
+        if work_types is not None:
             if isinstance(work_types, str):
                 # Handle comma-separated string
                 work_types = [wt.strip() for wt in work_types.split(',')]
@@ -203,7 +203,7 @@ class JobSearch:
             params['f_JIYN'] = 'true' if jobs_at_connections else 'false'
         
         # Add job function filter (f_F parameter) - supports multiple values
-        if job_function:
+        if job_function is not None:
             if isinstance(job_function, str):
                 # Handle comma-separated string
                 job_function = [jf.strip().lower() for jf in job_function.split(',')]
@@ -213,7 +213,7 @@ class JobSearch:
                 params['f_F'] = ','.join(valid_functions)
         
         # Add industry filter (f_SB2 parameter) - supports multiple values
-        if industry:
+        if industry is not None:
             if isinstance(industry, str):
                 # Handle comma-separated string
                 industry = [ind.strip() for ind in industry.split(',')]
@@ -227,11 +227,11 @@ class JobSearch:
             params['sortBy'] = sort_by.upper()
         
         # Add city ID filter (f_PP parameter)
-        if city_id:
+        if city_id is not None:
             params['f_PP'] = str(city_id)
         
         # Add company ID filter (f_C parameter)
-        if company_id:
+        if company_id is not None:
             params['f_C'] = str(company_id)
         
         # Build URL with query string

@@ -35,9 +35,8 @@ GEO_ID_MAP = {
     'Singapore': '104010088',
     
     # Indian Cities
-    'Bengaluru': '102713980',
-    'Bangalore': '102713980',
-    'Hyderabad': '104221682',
+    'Bangalore': '105214831',
+    'Hyderabad': '105556991',
     'Pune': '102983800',
     'Chennai': '104234821',
     'Delhi-NCR': '104842695',
@@ -54,7 +53,7 @@ GEO_ID_MAP = {
     'Lucknow': '102883759',
     'Indore': '102872003',
     'Nagpur': '104077668',
-    'Vadodara': '104578719',
+    'Vadodara': '106728703',
     'Visakhapatnam': '104143520',
     'Coimbatore': '103096512',
     'Ludhiana': '102937664',
