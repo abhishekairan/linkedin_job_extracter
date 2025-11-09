@@ -21,6 +21,7 @@ from linkedin_scraper.config import Config
 from linkedin_scraper.browser_manager import BrowserManager
 from linkedin_scraper.job_search import JobSearch
 from linkedin_scraper.security import SecurityManager
+from geo_id import get_geo_id, get_geo_ids
 
 # Setup logging
 log_dir = Path(__file__).parent / 'logs'
@@ -114,52 +115,74 @@ def get_browser_instance():
         return None, None
 
 
-def search_jobs_single(keywords, location, driver, job_search, num_results=None, filters=None):
+def search_jobs_single(keywords, geo_id, driver, job_search, num_results=None, filters=None, location_name=None):
     """
-    Perform a single job search with given keywords and location.
+    Perform a single job search with given keywords and geo-id.
     
     Args:
         keywords (str): Job search keywords
-        location (str): Job location filter
+        geo_id (str): LinkedIn geo-id for location (numeric string)
         driver: Selenium WebDriver instance
         job_search: JobSearch instance
         num_results (int, optional): Number of results (ignored - loads all available)
         filters (dict, optional): Dictionary of filter parameters to pass to search_jobs()
+        location_name (str, optional): Location name for logging purposes
     
     Returns:
         dict: Dictionary mapping job_id to job_link
     """
     try:
-        logger.info(f"Searching for jobs: '{keywords}' in {location}")
+        # Prepare location display for logging
+        if location_name:
+            location_display = location_name
+            geo_id_display = f" (geo-id: {geo_id})" if geo_id else ""
+        elif geo_id:
+            location_display = f"geo-id:{geo_id}"
+            geo_id_display = ""
+        else:
+            location_display = "No location"
+            geo_id_display = ""
+        
+        logger.info(f"Searching for jobs: '{keywords}' in {location_display}{geo_id_display}")
         
         # Rate limit to prevent account flagging
         security_manager.rate_limit_search()
         
         # Prepare filter parameters (default to empty dict if not provided)
-        filter_params = filters or {}
+        filter_params = filters.copy() if filters else {}
+        
+        # Ensure geo_id is in filters (prioritize geo_id over location)
+        # Only add geo_id if it's not None
+        if geo_id is not None:
+            filter_params['geo_id'] = geo_id
+        # Remove location parameter if present, as we're using geo_id instead
+        if 'location' in filter_params:
+            del filter_params['location']
         
         # Perform job search and extract jobs
         # Using optimized direct URL navigation - login handled automatically by job_search if required
         # This minimizes login attempts by only logging in when LinkedIn requires it
+        # Pass location=None to ensure we only use geo_id in URL
         jobs_ids = job_search.search_jobs(
             keywords, 
-            location, 
-            num_results or 0,
+            location=None,  # Don't use location parameter, use geo_id in filters instead
+            num_results=num_results or 0,
             **filter_params
         )
         if not jobs_ids:
-            logger.warning(f"No jobs found for '{keywords}' in {location}")
+            logger.warning(f"No jobs found for '{keywords}' in {location_display}{geo_id_display}")
             return {}
         
         # Extract job data using the same JobSearch instance
         # This ensures extraction uses the same detection methods as search
         jobs_data = job_search.extract_jobs(jobs_ids)
         
-        logger.info(f"✓ Found {len(jobs_data)} jobs for '{keywords}' in {location}")
+        logger.info(f"✓ Found {len(jobs_data)} jobs for '{keywords}' in {location_display}{geo_id_display}")
         return jobs_data
     
     except Exception as e:
-        logger.error(f"Error during job search for '{keywords}' in {location}: {str(e)}", exc_info=True)
+        location_display = location_name or (f"geo-id:{geo_id}" if geo_id else "No location")
+        logger.error(f"Error during job search for '{keywords}' in {location_display}: {str(e)}", exc_info=True)
         return {}
 
 
@@ -167,10 +190,11 @@ def search_jobs_standalone(keywords, locations=None, num_results=None, filters=N
     """
     Search for jobs using the shared browser instance.
     Supports both single and multiple keywords/locations.
+    Locations are converted to geo-ids and applied through URL parameters.
     
     Args:
         keywords (str or list): Job search keywords (single string or list of strings)
-        locations (str or list, optional): Job location filter (single string or list of strings)
+        locations (str or list, optional): Job location filter (single string or list of strings, or geo-ids)
         num_results (int, optional): Number of results (ignored - loads all available)
         filters (dict, optional): Dictionary of filter parameters to pass to search_jobs()
     
@@ -184,12 +208,47 @@ def search_jobs_standalone(keywords, locations=None, num_results=None, filters=N
         else:
             keywords_list = keywords
         
+        # Convert locations to geo-ids
         if locations is None:
-            locations_list = [None]
-        elif isinstance(locations, str):
-            locations_list = [locations]
+            geo_ids_list = [None]
+            location_names_map = {None: "No location"}
         else:
-            locations_list = locations
+            # Get geo-ids from locations (handles both location names and numeric geo-ids)
+            if isinstance(locations, str):
+                locations_list = [locations]
+            else:
+                locations_list = locations
+            
+            # Convert locations to geo-ids and create mapping
+            geo_ids_list = []
+            location_names_map = {}
+            
+            for loc in locations_list:
+                if not loc:
+                    continue
+                    
+                loc = loc.strip()
+                
+                # Check if it's already a numeric geo-id
+                if loc.isdigit():
+                    geo_id = loc
+                    geo_ids_list.append(geo_id)
+                    location_names_map[geo_id] = f"geo-id:{geo_id}"
+                else:
+                    # Try to get geo-id from location name
+                    geo_id = get_geo_id(loc)
+                    if geo_id:
+                        if geo_id not in geo_ids_list:
+                            geo_ids_list.append(geo_id)
+                        location_names_map[geo_id] = loc
+                    else:
+                        # Location not found, log warning but skip it
+                        logger.warning(f"Location '{loc}' not found in geo-id map and is not a numeric geo-id. Skipping.")
+        
+        # If no geo-ids found, use None (search without location filter)
+        if not geo_ids_list:
+            geo_ids_list = [None]
+            location_names_map = {None: "No location"}
         
         # Get browser instance once (reused for all searches)
         browser_manager, driver = get_browser_instance()
@@ -202,19 +261,20 @@ def search_jobs_standalone(keywords, locations=None, num_results=None, filters=N
         
         # Accumulate all results
         all_jobs = {}
-        total_searches = len(keywords_list) * len(locations_list)
+        total_searches = len(keywords_list) * len(geo_ids_list)
         search_count = 0
         
-        logger.info(f"Starting job search: {len(keywords_list)} keyword(s) × {len(locations_list)} location(s) = {total_searches} search(es)")
+        logger.info(f"Starting job search: {len(keywords_list)} keyword(s) × {len(geo_ids_list)} location(s) = {total_searches} search(es)")
         
-        # Iterate through each location, then each keyword
-        for location in locations_list:
+        # Iterate through each geo-id (location), then each keyword
+        # This ensures for every location, each job title is searched
+        for geo_id in geo_ids_list:
+            location_name = location_names_map.get(geo_id)
+            
             for keyword in keywords_list:
                 search_count += 1
-                logger.info(f"[{search_count}/{total_searches}] Processing: keyword='{keyword}', location='{location or 'None'}'")
-                
-                # Perform single search with filters
-                jobs_data = search_jobs_single(keyword, location, driver, job_search, num_results, filters)
+                # Perform single search with geo_id in filters
+                jobs_data = search_jobs_single(keyword, geo_id, driver, job_search, num_results, filters, location_name)
                 
                 # Merge results (all_jobs dict will automatically deduplicate by job_id)
                 all_jobs.update(jobs_data)
@@ -259,11 +319,11 @@ Examples:
     
     # Named arguments for multiple keywords/locations
     parser.add_argument('--keywords', dest='keywords_list', help='Comma-separated list of job search keywords')
-    parser.add_argument('--locations', dest='locations_list', help='Comma-separated list of job locations')
-    parser.add_argument('--location', dest='location_named', help='Job location filter (alternative to positional)')
+    parser.add_argument('--locations', dest='locations_list', help='Comma-separated list of job locations (will be converted to geo-ids automatically, or can be geo-ids directly)')
+    parser.add_argument('--location', dest='location_named', help='Job location filter (alternative to positional, will be converted to geo-id automatically)')
     
     # Core search parameters
-    parser.add_argument('--geo-id', dest='geo_id', help='LinkedIn geo ID for location (numeric string, more precise than location name)')
+    parser.add_argument('--geo-id', dest='geo_id', help='LinkedIn geo ID for location (numeric string, can be comma-separated for multiple locations). Takes precedence over --location/--locations. Locations are applied through URL parameters.')
     parser.add_argument('--distance', type=int, help='Search radius in miles/km from location (default: 120)')
     parser.add_argument('--time-filter', dest='time_filter', 
                        choices=['any', '1hour', '2hours', '3hours', '4hours', '6hours', '8hours', '12hours', '1day', 'week', 'month'],
@@ -337,12 +397,22 @@ Examples:
         sys.exit(1)
     
     # Parse locations (support both positional and --location)
+    # Note: Locations are converted to geo-ids automatically
+    # If --geo-id is provided, it takes precedence and locations are ignored
     location_value = args.location_named or args.location
-    if args.locations_list:
-        # Use --locations if provided
+    if args.geo_id:
+        # If --geo-id is provided directly, use it and ignore location arguments
+        # Support comma-separated geo-ids
+        if ',' in args.geo_id:
+            locations = [gid.strip() for gid in args.geo_id.split(',')]
+        else:
+            locations = [args.geo_id.strip()]
+        logger.info(f"Using geo-ids directly: {locations}")
+    elif args.locations_list:
+        # Use --locations if provided (will be converted to geo-ids)
         locations = [l.strip() for l in args.locations_list.split(',')]
     elif location_value:
-        # Use positional or --location
+        # Use positional or --location (will be converted to geo-ids)
         if ',' in location_value:
             locations = [l.strip() for l in location_value.split(',')]
         else:
@@ -351,13 +421,10 @@ Examples:
         locations = [None]
     
     logger.info(f"Keywords: {keywords}")
-    logger.info(f"Locations: {locations}")
+    logger.info(f"Locations/Geo-ids: {locations}")
     
-    # Build filters dictionary
+    # Build filters dictionary (exclude geo_id from filters as it's handled separately)
     filters = {}
-    
-    if args.geo_id:
-        filters['geo_id'] = args.geo_id
     if args.distance:
         filters['distance'] = args.distance
     if args.time_filter:

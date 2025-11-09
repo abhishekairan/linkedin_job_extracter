@@ -4,18 +4,71 @@
 
 The LinkedIn Job Search function provides a comprehensive interface for searching LinkedIn jobs with advanced filtering capabilities. It supports all major LinkedIn search parameters, allowing you to build precise, targeted job searches through both command-line interface and programmatic API.
 
+**Key Features:**
+- ✅ Automatic location-to-geo-id conversion
+- ✅ Location filtering through URL parameters (geo-id)
+- ✅ Multiple keywords and locations support
+- ✅ Comprehensive filter options
+- ✅ On-demand login detection
+- ✅ Persistent browser sessions
+
+---
+
 ## Table of Contents
 
-1. [Architecture](#architecture)
-2. [Core Components](#core-components)
-3. [Search Parameters](#search-parameters)
-4. [Filter Options](#filter-options)
-5. [Command-Line Usage](#command-line-usage)
-6. [Programmatic Usage](#programmatic-usage)
-7. [URL Building Process](#url-building-process)
-8. [Filter Combinations](#filter-combinations)
-9. [Examples](#examples)
-10. [Best Practices](#best-practices)
+1. [Quick Start](#quick-start)
+2. [Architecture](#architecture)
+3. [Location & Geo-ID System](#location--geo-id-system)
+4. [Search Parameters](#search-parameters)
+5. [Filter Options](#filter-options)
+6. [Command-Line Usage](#command-line-usage)
+7. [Programmatic Usage](#programmatic-usage)
+8. [Examples](#examples)
+9. [Best Practices](#best-practices)
+10. [Troubleshooting](#troubleshooting)
+11. [Reference](#reference)
+
+---
+
+## Quick Start
+
+### Basic Command-Line Usage
+
+```bash
+# Simple search
+python search_jobs.py "Python Developer"
+
+# With location (automatically converted to geo-id)
+python search_jobs.py "Data Scientist" "United States"
+
+# Multiple keywords and locations
+python search_jobs.py --keywords "Python Developer,Data Scientist" --locations "United States,Germany"
+
+# Using geo-id directly
+python search_jobs.py "Software Engineer" --geo-id 103644278
+```
+
+### Basic Programmatic Usage
+
+```python
+from linkedin_scraper.job_search import JobSearch
+from linkedin_scraper.browser_manager import BrowserManager
+
+# Initialize
+browser_manager = BrowserManager()
+driver = browser_manager.get_or_create_browser()
+job_search = JobSearch(driver)
+
+# Search
+job_ids = job_search.search_jobs(
+    keywords="Python Developer",
+    geo_id="103644278"  # United States
+)
+
+# Extract results
+jobs = job_search.extract_jobs(job_ids)
+print(f"Found {len(jobs)} jobs")
+```
 
 ---
 
@@ -23,68 +76,123 @@ The LinkedIn Job Search function provides a comprehensive interface for searchin
 
 ### Components
 
-1. **JobSearch Class** (`linkedin_scraper/job_search.py`)
-   - Core search functionality
-   - URL building with filter support
-   - Login detection and handling
-   - Job ID extraction
+#### 1. **Geo-ID Module** (`geo_id.py`)
+- Location name to geo-id mapping
+- Automatic conversion of location names to LinkedIn geo-ids
+- Supports both location names and numeric geo-ids
+- Location filtering applied through URL parameters
 
-2. **CLI Interface** (`search_jobs.py`)
-   - Command-line argument parsing
-   - Filter parameter processing
-   - Results output and file saving
+#### 2. **JobSearch Class** (`linkedin_scraper/job_search.py`)
+- Core search functionality
+- URL building with filter support
+- Login detection and handling
+- Job ID extraction
 
-3. **Browser Service Integration**
-   - Connects to persistent browser instance
-   - Handles authentication automatically
-   - Maintains session for multiple searches
+#### 3. **CLI Interface** (`search_jobs.py`)
+- Command-line argument parsing
+- Location-to-geo-id conversion
+- Filter parameter processing
+- Results output and file saving
+
+#### 4. **Browser Service Integration**
+- Connects to persistent browser instance
+- Handles authentication automatically
+- Maintains session for multiple searches
 
 ### Search Flow
 
 ```
-1. Build Search URL with Parameters
+1. Convert Locations to Geo-IDs (if needed)
    ↓
-2. Navigate to LinkedIn Job Search Page
+2. Build Search URL with Parameters (using geoId)
    ↓
-3. Check if Login Required
+3. Navigate to LinkedIn Job Search Page
    ↓
-4. Login if Needed (On-Demand)
+4. Check if Login Required
    ↓
-5. Extract Job IDs from Search Results
+5. Login if Needed (On-Demand)
    ↓
-6. Scroll to Load More Results
+6. Extract Job IDs from Search Results
    ↓
-7. Return List of Job IDs
+7. Scroll to Load More Results
    ↓
-8. Convert Job IDs to Job Links Dictionary
+8. Return List of Job IDs
+   ↓
+9. Convert Job IDs to Job Links Dictionary
 ```
 
----
-
-## Core Components
-
-### JobSearch Class
-
-The `JobSearch` class is the main interface for performing job searches.
-
-#### Key Methods
+### Key Methods
 
 - **`search_jobs()`**: Main search method that accepts all filter parameters
-- **`_build_search_url()`**: Builds LinkedIn search URL with query parameters
+- **`_build_search_url()`**: Builds LinkedIn search URL with query parameters (prioritizes geo_id)
 - **`extract_jobs()`**: Converts job IDs to dictionary of job links
 - **`_is_login_required()`**: Detects if LinkedIn requires login
 - **`_scroll_to_load_more()`**: Scrolls page to load additional results
 
-#### Filter Constants
+---
 
-The class defines constants for all filter codes:
+## Location & Geo-ID System
 
-- `JOB_TYPE_CODES`: Job type filter codes (F, P, C, T, I, V)
-- `EXPERIENCE_LEVEL_CODES`: Experience level codes (1-6)
-- `WORK_TYPE_CODES`: Work type codes (1, 2, 3)
-- `JOB_FUNCTION_CODES`: Job function codes (sale, mgmt, acct, it, mktg, hr)
-- `SORT_OPTIONS`: Sort option codes (DD, R)
-- `TIME_FILTERS`: Time filter codes (r3600, r86400, etc.)
+### Overview
+
+The system uses **geo-ids** for location filtering, which are applied through URL parameters. Location names are automatically converted to geo-ids using the `geo_id.py` module.
+
+### How It Works
+
+1. **Location names** (e.g., "United States", "Germany") are automatically converted to geo-ids
+2. **Geo-ids** are applied directly to the URL using the `geoId` parameter
+3. For each location, all job titles are searched (location × keyword matrix)
+
+### Usage Options
+
+#### Option 1: Location Names (Recommended)
+```bash
+# Automatically converted to geo-id
+python search_jobs.py "Developer" "United States"
+python search_jobs.py "Developer" --locations "United States,Germany"
+```
+
+#### Option 2: Geo-IDs Directly
+```bash
+# Use numeric geo-ids directly
+python search_jobs.py "Developer" --geo-id 103644278
+python search_jobs.py "Developer" --geo-id "103644278,104514075"
+```
+
+#### Option 3: Mixed (Names and Geo-IDs)
+```bash
+# Mix location names and geo-ids
+python search_jobs.py "Developer" --locations "United States,103644278,Germany"
+```
+
+### Supported Locations
+
+The `geo_id.py` module includes mappings for:
+
+- **Countries**: United States, United Kingdom, Germany, France, India, Canada, Australia, and more
+- **Indian Cities**: Bengaluru, Hyderabad, Pune, Chennai, Delhi-NCR, Mumbai, Kochi
+- **US Cities**: New York, San Francisco, Los Angeles, Chicago, Seattle, and more
+
+### Common Geo-IDs
+
+| Location | Geo ID |
+|----------|--------|
+| United States | 103644278 |
+| United Kingdom | 104738473 |
+| Germany | 104514075 |
+| France | 104016111 |
+| India | 102713980 |
+| Canada | 103720260 |
+| Australia | 104057199 |
+
+> **Note**: See `Docs/Linkedin_search_query.md` for complete geo-ID reference.
+
+### Search Behavior
+
+When multiple locations and keywords are provided:
+- **For each location**, **each keyword** is searched
+- Results are combined and deduplicated automatically
+- Example: 2 locations × 3 keywords = 6 searches
 
 ---
 
@@ -92,25 +200,23 @@ The class defines constants for all filter codes:
 
 ### Required Parameters
 
-- **`keywords`** (str): Job search keywords or job titles
-  - Example: `"Python Developer"`, `"Data Scientist"`, `"Software Engineer"`
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `keywords` | str | Job search keywords or job titles | `"Python Developer"` |
 
-### Optional Core Parameters
+### Core Location Parameters
 
-- **`location`** (str): Job location filter
-  - Example: `"United States"`, `"New York"`, `"San Francisco"`
-  
-- **`geo_id`** (str): LinkedIn geo ID for location (more precise than location name)
-  - Example: `"103644278"` (United States), `"104514075"` (Germany)
-  - See `Docs/Linkedin_search_query.md` for geo ID codes
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `location` | str | Location name (converted to geo-id automatically) | `"United States"` |
+| `geo_id` | str | LinkedIn geo-id (takes precedence over location) | `"103644278"` |
+| `distance` | int | Search radius in miles/km (default: 120) | `50`, `100` |
 
-- **`distance`** (int): Search radius in miles/km from location
-  - Default: `120`
-  - Example: `25`, `50`, `100`
+### Time Filter
 
-- **`time_filter`** (str): Time filter for job posting date
-  - Options: `'any'`, `'1hour'`, `'2hours'`, `'3hours'`, `'4hours'`, `'6hours'`, `'8hours'`, `'12hours'`, `'1day'`, `'week'`, `'month'`
-  - Example: `'week'` for jobs posted in the last week
+| Parameter | Type | Options | Example |
+|-----------|------|---------|---------|
+| `time_filter` | str | `any`, `1hour`, `2hours`, `3hours`, `4hours`, `6hours`, `8hours`, `12hours`, `1day`, `week`, `month` | `week` |
 
 ---
 
@@ -120,154 +226,151 @@ The class defines constants for all filter codes:
 
 Filter jobs by employment type.
 
-**Codes:**
-- `F`: Full-time
-- `P`: Part-time
-- `C`: Contract
-- `T`: Temporary
-- `I`: Internship
-- `V`: Volunteer
+| Code | Description |
+|------|-------------|
+| `F` | Full-time |
+| `P` | Part-time |
+| `C` | Contract |
+| `T` | Temporary |
+| `I` | Internship |
+| `V` | Volunteer |
 
 **Usage:**
-- Single: `job_types='F'`
-- Multiple: `job_types='F,C'` or `job_types=['F', 'C']`
-
-**Command-line:**
 ```bash
---jobtype F
---jobtype F,C
+--jobtype F              # Single
+--jobtype F,C            # Multiple
+```
+
+```python
+job_types="F"            # Single
+job_types="F,C"          # Multiple (string)
+job_types=["F", "C"]     # Multiple (list)
 ```
 
 ### 2. Experience Level Filters (f_E)
 
 Filter jobs by experience level required.
 
-**Codes:**
-- `1`: Internship
-- `2`: Entry level
-- `3`: Associate
-- `4`: Mid-Senior level
-- `5`: Director
-- `6`: Executive
+| Code | Description |
+|------|-------------|
+| `1` | Internship |
+| `2` | Entry level |
+| `3` | Associate |
+| `4` | Mid-Senior level |
+| `5` | Director |
+| `6` | Executive |
 
 **Usage:**
-- Single: `experience_levels='4'`
-- Multiple: `experience_levels='4,5,6'` or `experience_levels=['4', '5', '6']`
-
-**Command-line:**
 ```bash
---experience 4
---experience 4,5,6
+--experience 4           # Single
+--experience 4,5,6       # Multiple
+```
+
+```python
+experience_levels="4"            # Single
+experience_levels="4,5,6"        # Multiple (string)
+experience_levels=["4", "5", "6"]  # Multiple (list)
 ```
 
 ### 3. Work Type Filters (f_WT)
 
 Filter jobs by work location type.
 
-**Codes:**
-- `1`: On-site
-- `2`: Hybrid
-- `3`: Remote
+| Code | Description |
+|------|-------------|
+| `1` | On-site |
+| `2` | Hybrid |
+| `3` | Remote |
 
 **Usage:**
-- Single: `work_types='3'`
-- Multiple: `work_types='2,3'` or `work_types=['2', '3']`
-
-**Command-line:**
 ```bash
---worktype 3
---worktype 2,3
+--worktype 3            # Remote only
+--worktype 2,3          # Hybrid and Remote
+```
+
+```python
+work_types="3"          # Remote only
+work_types="2,3"        # Hybrid and Remote
 ```
 
 ### 4. Easy Apply Filter (f_EA)
 
 Filter for jobs with Easy Apply enabled.
 
-**Values:**
-- `True`: Easy Apply jobs only
-- `False`: All jobs (including external applications)
-
 **Usage:**
-- `easy_apply=True`
-
-**Command-line:**
 ```bash
---easy-apply        # Enable filter
---no-easy-apply     # Disable filter (include all jobs)
+--easy-apply           # Enable filter
+--no-easy-apply        # Disable filter
+```
+
+```python
+easy_apply=True        # Enable
+easy_apply=False       # Disable
 ```
 
 ### 5. Actively Hiring Filter (f_AL)
 
 Filter for companies actively hiring.
 
-**Values:**
-- `True`: Companies actively hiring only
-- `False`: All companies
-
 **Usage:**
-- `actively_hiring=True`
-
-**Command-line:**
 ```bash
---actively-hiring        # Enable filter
---no-actively-hiring     # Disable filter
+--actively-hiring      # Enable filter
+--no-actively-hiring   # Disable filter
+```
+
+```python
+actively_hiring=True   # Enable
 ```
 
 ### 6. Verified Jobs Filter (f_VJ)
 
 Filter for verified job postings only (helps avoid scams).
 
-**Values:**
-- `True`: Verified jobs only
-- `False`: All job postings
-
 **Usage:**
-- `verified_jobs=True`
-
-**Command-line:**
 ```bash
 --verified-jobs        # Enable filter
 --no-verified-jobs     # Disable filter
+```
+
+```python
+verified_jobs=True     # Enable
 ```
 
 ### 7. Jobs at Connections Filter (f_JIYN)
 
 Filter for jobs at companies where you have LinkedIn connections.
 
-**Values:**
-- `True`: Jobs at companies with connections only
-- `False`: All jobs
-
 **Usage:**
-- `jobs_at_connections=True`
-- **Note:** Requires LinkedIn login
-
-**Command-line:**
 ```bash
---jobs-at-connections        # Enable filter
---no-jobs-at-connections     # Disable filter
+--jobs-at-connections  # Enable filter
+```
+
+```python
+jobs_at_connections=True  # Enable (requires login)
 ```
 
 ### 8. Job Function Filters (f_F)
 
 Filter jobs by job function/department.
 
-**Codes:**
-- `sale`: Sales
-- `mgmt`: Management
-- `acct`: Accounting
-- `it`: Information Technology
-- `mktg`: Marketing
-- `hr`: Human Resources
+| Code | Description |
+|------|-------------|
+| `sale` | Sales |
+| `mgmt` | Management |
+| `acct` | Accounting |
+| `it` | Information Technology |
+| `mktg` | Marketing |
+| `hr` | Human Resources |
 
 **Usage:**
-- Single: `job_function='it'`
-- Multiple: `job_function='it,mktg'` or `job_function=['it', 'mktg']`
-
-**Command-line:**
 ```bash
---job-function it
---job-function it,mktg
+--job-function it           # Single
+--job-function it,mktg      # Multiple
+```
+
+```python
+job_function="it"           # Single
+job_function="it,mktg"      # Multiple
 ```
 
 ### 9. Industry Filters (f_SB2)
@@ -277,62 +380,58 @@ Filter jobs by industry using numeric industry codes.
 **Common Codes:**
 - `4`: Computer Software
 - `5`: Computer Networking
-- `9`: Law Practice
 - `96`: Information Technology and Services
 - `80`: Marketing and Advertising
 
 **Usage:**
-- Single: `industry='96'`
-- Multiple: `industry='96,4'` or `industry=['96', '4']`
-- See `Docs/Linkedin_search_query.md` for complete industry codes list
-
-**Command-line:**
 ```bash
---industry 96
---industry 96,4
+--industry 96          # Single
+--industry 96,4        # Multiple
 ```
+
+```python
+industry="96"          # Single
+industry="96,4"        # Multiple
+```
+
+> **Note**: See `Docs/Linkedin_search_query.md` for complete industry codes.
 
 ### 10. Sorting Options (sortBy)
 
 Sort search results.
 
-**Options:**
-- `DD`: Date Descending (newest jobs first)
-- `R`: Relevance (default sorting)
+| Option | Description |
+|--------|-------------|
+| `DD` | Date Descending (newest jobs first) |
+| `R` | Relevance (default) |
 
 **Usage:**
-- `sort_by='DD'`
-
-**Command-line:**
 ```bash
 --sort-by DD    # Newest first
---sort-by R     # Relevance (default)
+--sort-by R     # Relevance
 ```
 
-### 11. Advanced Location Filters
+```python
+sort_by="DD"    # Newest first
+sort_by="R"     # Relevance
+```
+
+### 11. Advanced Filters
 
 #### City ID Filter (f_PP)
-
-Filter by specific city using numeric city ID.
-
-**Usage:**
-- `city_id='104842695'` (Delhi-NCR)
-
-**Command-line:**
 ```bash
 --city-id 104842695
 ```
+```python
+city_id="104842695"
+```
 
 #### Company ID Filter (f_C)
-
-Filter by specific company using numeric company ID.
-
-**Usage:**
-- `company_id='123456'`
-
-**Command-line:**
 ```bash
 --company-id 123456
+```
+```python
+company_id="123456"
 ```
 
 ---
@@ -351,17 +450,19 @@ python search_jobs.py <keywords> [location] [output_file] [filter_options]
 # Simple search
 python search_jobs.py "Python Developer"
 
-# With location
-python search_jobs.py "Data Scientist" "New York"
+# With location (converted to geo-id automatically)
+python search_jobs.py "Data Scientist" "United States"
 
-# Multiple keywords/locations
-python search_jobs.py --keywords "Python Developer,Data Scientist" --locations "United States,New York"
+# Multiple keywords and locations
+python search_jobs.py --keywords "Python Developer,Data Scientist" --locations "United States,Germany"
+
+# Using geo-id directly
+python search_jobs.py "Software Engineer" --geo-id 103644278
 ```
 
 ### Filter Examples
 
 #### Job Type and Work Type
-
 ```bash
 # Full-time remote jobs
 python search_jobs.py "Software Engineer" --location "United States" --jobtype F --worktype 3
@@ -371,7 +472,6 @@ python search_jobs.py "Developer" --location "New York" --jobtype F,C --worktype
 ```
 
 #### Experience Level
-
 ```bash
 # Mid-Senior to Executive levels
 python search_jobs.py "Director" --location "United States" --experience 4,5,6
@@ -381,7 +481,6 @@ python search_jobs.py "Software Engineer" --experience 2
 ```
 
 #### Time Filter and Sorting
-
 ```bash
 # Jobs posted in the last week, sorted by newest first
 python search_jobs.py "Python Developer" --location "United States" --time-filter week --sort-by DD
@@ -391,7 +490,6 @@ python search_jobs.py "Data Scientist" --time-filter 1day
 ```
 
 #### Easy Apply and Actively Hiring
-
 ```bash
 # Easy Apply jobs from actively hiring companies
 python search_jobs.py "Marketing Manager" --location "United States" --easy-apply --actively-hiring
@@ -401,7 +499,6 @@ python search_jobs.py "Software Engineer" --verified-jobs
 ```
 
 #### Job Function and Industry
-
 ```bash
 # IT and Marketing functions in tech industry
 python search_jobs.py "Manager" --location "United States" --job-function it,mktg --industry 96,4
@@ -410,7 +507,7 @@ python search_jobs.py "Manager" --location "United States" --job-function it,mkt
 python search_jobs.py "Sales" --job-function sale
 ```
 
-#### Complex Filter Combinations
+### Complex Filter Combinations
 
 ```bash
 # Full-time remote senior developer jobs with Easy Apply, posted this week
@@ -433,22 +530,13 @@ python search_jobs.py "Director" \
   --verified-jobs
 ```
 
-### Advanced Examples
-
-#### Using Geo ID
+### Multiple Searches
 
 ```bash
-# More precise location using geo ID
-python search_jobs.py "Developer" --geo-id 103644278 --distance 50
-```
-
-#### Multiple Searches
-
-```bash
-# Search multiple keywords and locations
+# Search multiple keywords and locations (each location × each keyword)
 python search_jobs.py \
   --keywords "Python Developer,Data Scientist,Software Engineer" \
-  --locations "New York,San Francisco,Seattle" \
+  --locations "United States,Germany,United Kingdom" \
   --jobtype F \
   --worktype 2,3 \
   --output results.json
@@ -471,10 +559,10 @@ driver = browser_manager.get_or_create_browser()
 # Create JobSearch instance
 job_search = JobSearch(driver)
 
-# Perform search
+# Perform search with geo-id
 job_ids = job_search.search_jobs(
     keywords="Python Developer",
-    location="United States"
+    geo_id="103644278"  # United States
 )
 
 # Convert to job links
@@ -488,7 +576,7 @@ print(f"Found {len(jobs)} jobs")
 # Full-time remote jobs with Easy Apply
 job_ids = job_search.search_jobs(
     keywords="Software Engineer",
-    location="United States",
+    geo_id="103644278",
     job_types="F",
     work_types="3",
     easy_apply=True,
@@ -499,7 +587,7 @@ job_ids = job_search.search_jobs(
 # Mid-Senior to Executive levels in IT industry
 job_ids = job_search.search_jobs(
     keywords="Director",
-    location="United States",
+    geo_id="103644278",
     experience_levels=["4", "5", "6"],
     job_function="it",
     industry="96,4",
@@ -507,16 +595,18 @@ job_ids = job_search.search_jobs(
 )
 ```
 
-### Multiple Values
+### Using Location Names (with geo_id module)
 
 ```python
-# Multiple job types and work types
+from geo_id import get_geo_id
+
+# Convert location name to geo-id
+geo_id = get_geo_id("United States")  # Returns "103644278"
+
+# Use in search
 job_ids = job_search.search_jobs(
-    keywords="Developer",
-    location="New York",
-    job_types="F,C",  # Full-time and Contract
-    work_types=["2", "3"],  # Hybrid and Remote (list format)
-    experience_levels="4,5"  # Mid-Senior and Director
+    keywords="Python Developer",
+    geo_id=geo_id
 )
 ```
 
@@ -525,6 +615,7 @@ job_ids = job_search.search_jobs(
 ```python
 from linkedin_scraper.job_search import JobSearch
 from linkedin_scraper.browser_manager import BrowserManager
+from geo_id import get_geo_id
 import json
 
 # Initialize
@@ -532,11 +623,13 @@ browser_manager = BrowserManager()
 driver = browser_manager.get_or_create_browser()
 job_search = JobSearch(driver)
 
+# Get geo-id for location
+geo_id = get_geo_id("United States")
+
 # Search with multiple filters
 job_ids = job_search.search_jobs(
     keywords="Senior Software Engineer",
-    location="United States",
-    geo_id="103644278",
+    geo_id=geo_id,
     distance=50,
     job_types="F",
     work_types="2,3",
@@ -562,106 +655,6 @@ print(f"Found {len(jobs)} jobs")
 
 ---
 
-## URL Building Process
-
-### URL Structure
-
-LinkedIn job search URLs follow this structure:
-
-```
-https://www.linkedin.com/jobs/search-results/?<parameters>
-```
-
-### Parameter Encoding
-
-- Parameters are separated by `&`
-- Spaces are encoded as `%20`
-- Commas are encoded as `%2C`
-- Multiple values are comma-separated (e.g., `f_JT=F%2CC`)
-
-### Example URL
-
-```
-https://www.linkedin.com/jobs/search-results/?keywords=Software%20Engineer&geoId=103644278&f_JT=F&f_WT=2%2C3&f_E=4%2C5&f_EA=true&f_TPR=r604800&sortBy=DD
-```
-
-This URL searches for:
-- Keywords: "Software Engineer"
-- Location: United States (geoId: 103644278)
-- Job Type: Full-time (F)
-- Work Type: Hybrid and Remote (2,3)
-- Experience: Mid-Senior and Director (4,5)
-- Easy Apply: Enabled
-- Time Filter: Last week (r604800)
-- Sort: Date Descending (DD)
-
-### Internal URL Building
-
-The `_build_search_url()` method:
-
-1. Validates all filter parameters
-2. Converts filter values to LinkedIn parameter codes
-3. Joins multiple values with commas
-4. URL-encodes all parameters
-5. Builds complete search URL
-
----
-
-## Filter Combinations
-
-### Common Combinations
-
-#### 1. Remote Tech Jobs
-
-```bash
-python search_jobs.py "Software Engineer" \
-  --location "United States" \
-  --jobtype F \
-  --worktype 3 \
-  --job-function it \
-  --industry 96,4
-```
-
-#### 2. Recent Easy Apply Jobs
-
-```bash
-python search_jobs.py "Developer" \
-  --location "New York" \
-  --easy-apply \
-  --time-filter 1day \
-  --sort-by DD
-```
-
-#### 3. Senior Management Roles
-
-```bash
-python search_jobs.py "Director" \
-  --location "United States" \
-  --jobtype F \
-  --experience 5,6 \
-  --job-function mgmt \
-  --actively-hiring
-```
-
-#### 4. Entry Level Positions
-
-```bash
-python search_jobs.py "Software Engineer" \
-  --location "United States" \
-  --experience 1,2 \
-  --jobtype F,I
-```
-
-### Best Practices for Combinations
-
-1. **Start Broad, Then Narrow**: Begin with keywords and location, then add filters
-2. **Use Time Filters**: Combine with `--time-filter week` and `--sort-by DD` for fresh opportunities
-3. **Combine Boolean Filters**: Use `--easy-apply` with `--actively-hiring` for better results
-4. **Multiple Work Types**: Include `--worktype 2,3` for hybrid and remote flexibility
-5. **Experience Ranges**: Use multiple experience levels like `--experience 4,5,6` for senior roles
-
----
-
 ## Examples
 
 ### Example 1: Remote Full-Time Developer Jobs
@@ -681,7 +674,7 @@ python search_jobs.py "Python Developer" \
 ```python
 job_ids = job_search.search_jobs(
     keywords="Python Developer",
-    location="United States",
+    geo_id="103644278",
     job_types="F",
     work_types="3",
     time_filter="week",
@@ -706,7 +699,7 @@ python search_jobs.py "Marketing Manager" \
 ```python
 job_ids = job_search.search_jobs(
     keywords="Marketing Manager",
-    location="United States",
+    geo_id="103644278",
     job_types="F",
     experience_levels="4,5",
     job_function="mktg",
@@ -720,7 +713,6 @@ job_ids = job_search.search_jobs(
 **Command-line:**
 ```bash
 python search_jobs.py "Director" \
-  --location "United States" \
   --geo-id 103644278 \
   --jobtype F \
   --experience 5,6 \
@@ -736,7 +728,6 @@ python search_jobs.py "Director" \
 ```python
 job_ids = job_search.search_jobs(
     keywords="Director",
-    location="United States",
     geo_id="103644278",
     job_types="F",
     experience_levels="5,6",
@@ -749,11 +740,38 @@ job_ids = job_search.search_jobs(
 )
 ```
 
+### Example 4: Multiple Locations and Keywords
+
+**Command-line:**
+```bash
+python search_jobs.py \
+  --keywords "Python Developer,Data Scientist" \
+  --locations "United States,Germany,United Kingdom" \
+  --jobtype F \
+  --worktype 3 \
+  --time-filter week \
+  --output multi_location_jobs.json
+```
+
+This will perform 6 searches (2 keywords × 3 locations).
+
 ---
 
 ## Best Practices
 
-### 1. Use Time Filters
+### 1. Use Geo-IDs for Precision
+
+Geo-IDs provide more precise location filtering than location names:
+
+```bash
+# Preferred: Use geo-id
+python search_jobs.py "Developer" --geo-id 103644278
+
+# Also works: Location name (automatically converted)
+python search_jobs.py "Developer" --location "United States"
+```
+
+### 2. Use Time Filters
 
 Always combine searches with time filters to find fresh opportunities:
 
@@ -761,7 +779,7 @@ Always combine searches with time filters to find fresh opportunities:
 --time-filter week --sort-by DD
 ```
 
-### 2. Combine Boolean Filters
+### 3. Combine Boolean Filters
 
 Use multiple boolean filters for better results:
 
@@ -769,7 +787,7 @@ Use multiple boolean filters for better results:
 --easy-apply --actively-hiring --verified-jobs
 ```
 
-### 3. Use Multiple Work Types
+### 4. Use Multiple Work Types
 
 Include both hybrid and remote for flexibility:
 
@@ -777,20 +795,12 @@ Include both hybrid and remote for flexibility:
 --worktype 2,3
 ```
 
-### 4. Start with Broad Keywords
+### 5. Start with Broad Keywords
 
 Begin with general keywords, then narrow with filters:
 
 ```bash
 python search_jobs.py "Engineer" --location "United States" --job-function it
-```
-
-### 5. Use Geo ID for Precision
-
-Use `--geo-id` instead of location name for more precise results:
-
-```bash
---geo-id 103644278  # United States
 ```
 
 ### 6. Rate Limiting
@@ -810,7 +820,7 @@ Always save results to a file for later analysis:
 Use multiple keywords and locations for comprehensive searches:
 
 ```bash
---keywords "Python,Java,JavaScript" --locations "New York,San Francisco,Seattle"
+--keywords "Python,Java,JavaScript" --locations "United States,Germany,United Kingdom"
 ```
 
 ---
@@ -819,25 +829,30 @@ Use multiple keywords and locations for comprehensive searches:
 
 ### Common Issues
 
-1. **No Results Found**
-   - Try broadening filters (remove some filters)
-   - Check if keywords are too specific
-   - Verify location is correct
+#### 1. No Results Found
+- **Solution**: Try broadening filters (remove some filters)
+- **Check**: Verify keywords are not too specific
+- **Verify**: Location/geo-id is correct
 
-2. **Login Required**
-   - The system automatically handles login when needed
-   - Ensure `.env` has correct credentials
-   - Set `HEADLESS_MODE=False` if CAPTCHA is required
+#### 2. Login Required
+- **Solution**: The system automatically handles login when needed
+- **Ensure**: `.env` has correct credentials
+- **Set**: `HEADLESS_MODE=False` if CAPTCHA is required
 
-3. **Invalid Filter Values**
-   - Check filter codes against documentation
-   - Ensure comma-separated values are correctly formatted
-   - Verify industry codes are numeric
+#### 3. Invalid Filter Values
+- **Solution**: Check filter codes against documentation
+- **Verify**: Comma-separated values are correctly formatted
+- **Check**: Industry codes are numeric
 
-4. **Rate Limiting**
-   - Wait between searches (system includes automatic rate limiting)
-   - Reduce number of searches per session
-   - Use longer delays for multiple searches
+#### 4. Rate Limiting
+- **Solution**: Wait between searches (system includes automatic rate limiting)
+- **Reduce**: Number of searches per session
+- **Use**: Longer delays for multiple searches
+
+#### 5. Location Not Found
+- **Solution**: Use geo-id directly if location name is not recognized
+- **Check**: Verify location name spelling
+- **Use**: `--geo-id` with numeric geo-id directly
 
 ---
 
@@ -874,25 +889,43 @@ Use multiple keywords and locations for comprehensive searches:
 | week | r604800 | Last week |
 | month | r2592000 | Last month |
 
-### Common Geo IDs
+### Common Geo-IDs
 
 | Location | Geo ID |
 |----------|--------|
 | United States | 103644278 |
 | United Kingdom | 104738473 |
 | Germany | 104514075 |
+| France | 104016111 |
 | India | 102713980 |
 | Canada | 103720260 |
+| Australia | 104057199 |
+| Netherlands | 102890883 |
+| Spain | 104277358 |
+| Italy | 103350519 |
 
-See `Docs/Linkedin_search_query.md` for complete lists of geo IDs and industry codes.
+> **Note**: See `Docs/Linkedin_search_query.md` for complete lists of geo-IDs and industry codes.
+
+### URL Building
+
+LinkedIn job search URLs use the `geoId` parameter for location filtering:
+
+```
+https://www.linkedin.com/jobs/search-results/?keywords=Software%20Engineer&geoId=103644278&f_JT=F&f_WT=2%2C3
+```
+
+The system automatically:
+1. Converts location names to geo-ids
+2. Builds URLs with `geoId` parameter
+3. Applies all filters as URL parameters
 
 ---
 
 ## Additional Resources
 
 - **LinkedIn Search Query Documentation**: `Docs/Linkedin_search_query.md`
-- **Job Search Service Documentation**: `JOB_SEARCH_SERVICE.md`
-- **Project Documentation**: `PROJECT.md`
+- **Job Search Service Documentation**: `Docs/JOB_SEARCH_SERVICE.md`
+- **Project Documentation**: `Docs/PROJECT.md`
 - **Changelog**: `CHANGELOG.md`
 
 ---
@@ -900,4 +933,3 @@ See `Docs/Linkedin_search_query.md` for complete lists of geo IDs and industry c
 ## Support
 
 For issues, questions, or contributions, please refer to the project repository or documentation.
-

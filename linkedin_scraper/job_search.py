@@ -134,13 +134,14 @@ class JobSearch:
         # Add keywords (required)
         params['keywords'] = keywords
         
-        # Add location if provided
-        if location:
-            params['location'] = location
-        
-        # Add geo ID if provided (more precise than location string)
+        # Prioritize geo_id over location string
+        # If geo_id is provided, use it and ignore location parameter
+        # This ensures location filter is applied through URL using geoId parameter
         if geo_id:
             params['geoId'] = geo_id
+        elif location:
+            # Only use location parameter if geo_id is not provided
+            params['location'] = location
         
         # Add distance (default 120 if not specified)
         if distance:
