@@ -186,21 +186,21 @@ class JobSearch:
             if valid_work_types:
                 params['f_WT'] = ','.join(valid_work_types)
         
-        # Add Easy Apply filter (f_EA parameter)
-        if easy_apply is not None:
-            params['f_EA'] = 'true' if easy_apply else 'false'
+        # Add Easy Apply filter (f_EA parameter) - only if explicitly set to True
+        if easy_apply is True:
+            params['f_EA'] = 'true'
         
-        # Add Actively Hiring filter (f_AL parameter)
-        if actively_hiring is not None:
-            params['f_AL'] = 'true' if actively_hiring else 'false'
+        # Add Actively Hiring filter (f_AL parameter) - only if explicitly set to True
+        if actively_hiring is True:
+            params['f_AL'] = 'true'
         
-        # Add Verified Jobs filter (f_VJ parameter)
-        if verified_jobs is not None:
-            params['f_VJ'] = 'true' if verified_jobs else 'false'
+        # Add Verified Jobs filter (f_VJ parameter) - only if explicitly set to True
+        if verified_jobs is True:
+            params['f_VJ'] = 'true'
         
-        # Add Jobs at Connections filter (f_JIYN parameter)
-        if jobs_at_connections is not None:
-            params['f_JIYN'] = 'true' if jobs_at_connections else 'false'
+        # Add Jobs at Connections filter (f_JIYN parameter) - only if explicitly set to True
+        if jobs_at_connections is True:
+            params['f_JIYN'] = 'true'
         
         # Add job function filter (f_F parameter) - supports multiple values
         if job_function is not None:

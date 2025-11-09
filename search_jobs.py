@@ -435,14 +435,15 @@ Examples:
         filters['experience_levels'] = args.experience_levels
     if args.work_types:
         filters['work_types'] = args.work_types
-    if args.easy_apply is not None:
-        filters['easy_apply'] = args.easy_apply
-    if args.actively_hiring is not None:
-        filters['actively_hiring'] = args.actively_hiring
-    if args.verified_jobs is not None:
-        filters['verified_jobs'] = args.verified_jobs
-    if args.jobs_at_connections is not None:
-        filters['jobs_at_connections'] = args.jobs_at_connections
+    # Only add boolean filters if explicitly set to True (not False or None)
+    if args.easy_apply is True:
+        filters['easy_apply'] = True
+    if args.actively_hiring is True:
+        filters['actively_hiring'] = True
+    if args.verified_jobs is True:
+        filters['verified_jobs'] = True
+    if args.jobs_at_connections is True:
+        filters['jobs_at_connections'] = True
     if args.job_function:
         filters['job_function'] = args.job_function
     if args.industry:
