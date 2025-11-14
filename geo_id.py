@@ -65,7 +65,6 @@ GEO_ID_MAP = {
     'Kanpur': '102880584',
     'Faridabad': '103051479',
     'Meerut': '103086813',
-    'Vadodara': '104578719',
     'Jamshedpur': '102945365',
     'Allahabad': '102894623',
     'Ranchi': '102965208',
